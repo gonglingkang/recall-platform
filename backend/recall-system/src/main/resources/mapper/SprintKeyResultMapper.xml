@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.recall.dao.sprint.SprintKeyResultMapper">
+
+    <!-- 查询关联了指定关键成果的所有冲刺任务 ID -->
+    <select id="selectSprintIdsByKeyResultId" resultType="long">
+        SELECT sprint_id FROM sprint_key_results WHERE key_result_id = #{keyResultId}
+    </select>
+
+</mapper>

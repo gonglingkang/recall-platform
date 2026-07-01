@@ -1,0 +1,62 @@
+server:
+  port: 20020
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: recall-system
+  profiles:
+    active: dev
+  jackson:
+    # 时间序列化：LocalDateTime 输出 ISO-8601，前端按需转本地时区（PRD 4.4）
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: UTC
+    default-property-inclusion: non_null
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/recall?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.recall.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      # 逻辑删除以实体上的 @TableLogic 注解为准（deletedAt 字段，null=未删，删除时置 NOW()）
+
+# 业务自定义配置
+recall:
+  jwt:
+    # HMAC-SHA 密钥，生产环境务必更换（至少 32 字节）
+    secret: recall-platform-jwt-secret-please-change-in-production-0123456789
+    # 过期时间 7 天（毫秒）
+    expiration-millis: 604800000
+
+logging:
+  level:
+    com.recall: debug
+    org.springframework.security: info
+
+# Swagger / OpenAPI
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  packages-to-scan: com.recall.controller

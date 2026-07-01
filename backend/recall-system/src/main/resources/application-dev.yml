@@ -1,0 +1,6 @@
+# 开发环境覆盖配置
+# 本地 MySQL 默认连接信息见 application.yml；如需调整在此覆盖
+spring:
+  datasource:
+    # 例：本地库密码不同时在此覆盖
+    # password: your-local-password

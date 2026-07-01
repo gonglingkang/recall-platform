@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.recall.dao.sprint.SprintItemMapper">
+
+    <!-- 标题唯一校验：同用户同月是否存在同名冲刺任务；编辑改名时排除自身 id -->
+    <select id="existsByName" resultType="boolean">
+        SELECT COUNT(*) FROM sprint_items
+        WHERE user_id = #{userId}
+          AND month = #{month}
+          AND title = #{title}
+          <if test="excludeId != null">
+          AND id &lt;&gt; #{excludeId}
+          </if>
+    </select>
+
+</mapper>
