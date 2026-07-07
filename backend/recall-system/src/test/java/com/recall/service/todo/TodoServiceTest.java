@@ -66,6 +66,8 @@ class TodoServiceTest extends BaseTest {
         TodoVO doneVo = todoService.changeStatus(todo.getId(), done);
         assertEquals("1", doneVo.getStatus());
         assertNotNull(doneVo.getDoneAt());
+        // DB 里 doneAt 应已落库
+        assertNotNull(todoMapper.selectById(todo.getId()).getDoneAt(), "完成时 doneAt 应写入 DB");
 
         // 撤销完成 → doneAt 应清空
         TodoStatusReq undo = new TodoStatusReq();
@@ -73,6 +75,8 @@ class TodoServiceTest extends BaseTest {
         TodoVO undoVo = todoService.changeStatus(todo.getId(), undo);
         assertEquals("0", undoVo.getStatus());
         assertNull(undoVo.getDoneAt(), "撤销完成应清空 doneAt");
+        // 关键：从 DB 重新查，确认 null 真正落库（updateById 默认 NOT_NULL 策略会跳过 null，曾导致此 bug）
+        assertNull(todoMapper.selectById(todo.getId()).getDoneAt(), "撤销完成后 DB 中 doneAt 必须为 null");
     }
 
     @Test

@@ -213,20 +213,30 @@ public class TodoServiceImpl implements TodoService {
         Todo todo = loadOwned(id);
         // 状态机：pending ⇄ done
         TodoStatus target = req.getStatus();
+        LambdaUpdateWrapper<Todo> uw = new LambdaUpdateWrapper<Todo>()
+                .eq(Todo::getId, id)
+                .eq(Todo::getUserId, UserContextHolder.requireUserId());
         if (target == TodoStatus.DONE) {
             if (TodoStatus.DONE.getValue().equals(todo.getStatus())) {
                 throw new BusinessException(ResultCode.CONFLICT, "待办已完成");
             }
+            // 完成：status=done，doneAt=当前时间
+            LocalDateTime now = LocalDateTime.now();
             todo.setStatus(TodoStatus.DONE.getValue());
-            todo.setDoneAt(LocalDateTime.now());
+            todo.setDoneAt(now);
+            uw.set(Todo::getStatus, TodoStatus.DONE.getValue())
+              .set(Todo::getDoneAt, now);
         } else if (target == TodoStatus.PENDING) {
-            // 撤销完成：清空 doneAt
+            // 撤销完成：status=pending，doneAt 清空
+            // 用 LambdaUpdateWrapper.set 显式置 null，绕开 updateById 默认 NOT_NULL 策略，保证 doneAt=null 落库
             todo.setStatus(TodoStatus.PENDING.getValue());
             todo.setDoneAt(null);
+            uw.set(Todo::getStatus, TodoStatus.PENDING.getValue())
+              .set(Todo::getDoneAt, null);
         } else {
             throw new BusinessException(ResultCode.PARAM_VALIDATE_FAILED, "状态变更仅支持 pending/done");
         }
-        todoMapper.updateById(todo);
+        todoMapper.update(null, uw);
         return toVO(todo);
     }
 
