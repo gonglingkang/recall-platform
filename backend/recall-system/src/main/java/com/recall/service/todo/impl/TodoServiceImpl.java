@@ -90,40 +90,51 @@ public class TodoServiceImpl implements TodoService {
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.plusMonths(1).atDay(1);
 
-        // 单次查询：当月创建的全部 ∪ 当月完成的（doneAt 落在当月）
+        // 查询生命周期区间与当月有交集的待办：
+        //   createdAt < 当月末（创建于当月结束前）
+        //   且 (doneAt 为空 即仍 pending，或 doneAt >= 当月初 即当月或之后才完成)
+        // 这样上月创建、下月才完成的跨月待办也会被查到，覆盖当月每一天。
         LambdaQueryWrapper<Todo> wrapper = new LambdaQueryWrapper<Todo>()
                 .eq(Todo::getUserId, userId)
                 .in(Todo::getStatus, TodoStatus.PENDING.getValue(), TodoStatus.DONE.getValue())
-                .and(w -> w
-                        .and(c -> c.ge(Todo::getCreatedAt, start.atStartOfDay()).lt(Todo::getCreatedAt, end.atStartOfDay()))
-                        .or(d -> d.ge(Todo::getDoneAt, start.atStartOfDay()).lt(Todo::getDoneAt, end.atStartOfDay())));
+                .lt(Todo::getCreatedAt, end.atStartOfDay())
+                .and(w -> w.isNull(Todo::getDoneAt)
+                        .or().ge(Todo::getDoneAt, start.atStartOfDay()));
         List<Todo> todos = todoMapper.selectList(wrapper);
 
-        // 按天分组：created 按 createdAt 日期归组，completed 按 doneAt 日期归组
-        Map<LocalDate, List<TodoVO>> createdByDay = new LinkedHashMap<>();
-        Map<LocalDate, List<TodoVO>> completedByDay = new LinkedHashMap<>();
-        for (Todo todo : todos) {
-            if (todo.getCreatedAt() != null) {
-                LocalDate createdDate = todo.getCreatedAt().toLocalDate();
-                if (!createdDate.isBefore(start) && createdDate.isBefore(end)) {
-                    createdByDay.computeIfAbsent(createdDate, k -> new ArrayList<>()).add(toVO(todo));
-                }
-            }
-            if (todo.getDoneAt() != null) {
-                LocalDate completedDate = todo.getDoneAt().toLocalDate();
-                if (!completedDate.isBefore(start) && completedDate.isBefore(end)) {
-                    completedByDay.computeIfAbsent(completedDate, k -> new ArrayList<>()).add(toVO(todo));
-                }
-            }
-        }
-
-        // 补全空日期：遍历月份每一天，无待办的也输出空 DayGroup
+        // 按天分组：对当月每一天 D，纳入生命周期区间覆盖 D 的待办。
+        // 区间 = [createdAt日, doneAt 为空 ? 今天 : doneAt日]：
+        //   - 已完成待办 doneAt 一定 ≤ 今天，区间为 [createdAt日, doneAt日]
+        //   - pending 待办仍在处理，区间为 [createdAt日, 今天]；未来日期尚未到来，待办不可能在那天“被处理”，故不覆盖
+        // 因此 D > 今天时该天列表恒为空（未来日无数据）。
+        LocalDate today = LocalDate.now();
         List<TodoMonthVO.DayGroup> days = new ArrayList<>();
         for (LocalDate d = start; d.isBefore(end); d = d.plusDays(1)) {
+            List<TodoVO> dayTodos = new ArrayList<>();
+            if (!d.isAfter(today)) {
+                for (Todo todo : todos) {
+                    if (todo.getCreatedAt() == null) {
+                        continue;
+                    }
+                    LocalDate createdDate = todo.getCreatedAt().toLocalDate();
+                    if (createdDate.isAfter(d)) {
+                        // 当天尚未创建
+                        continue;
+                    }
+                    if (todo.getDoneAt() != null) {
+                        LocalDate doneDate = todo.getDoneAt().toLocalDate();
+                        if (doneDate.isBefore(d)) {
+                            // 当天之前已完成，生命周期区间不再覆盖
+                            continue;
+                        }
+                    }
+                    // pending 待办区间上界为今天，已在 d <= today 保证下；done 待办上界为 doneDate，上面已校验
+                    dayTodos.add(toVO(todo));
+                }
+            }
             days.add(TodoMonthVO.DayGroup.builder()
                     .date(d)
-                    .created(createdByDay.getOrDefault(d, List.of()))
-                    .completed(completedByDay.getOrDefault(d, List.of()))
+                    .todos(dayTodos)
                     .build());
         }
 

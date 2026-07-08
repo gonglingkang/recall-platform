@@ -327,11 +327,11 @@ class TodoServiceTest extends BaseTest {
         LocalDate day3 = ym.atDay(3);
         LocalDate day5 = ym.atDay(5);
 
-        // day3 创建一条 pending
+        // day3 创建一条 pending：从 day3 起覆盖到月末每一天
         TodoVO t1 = todoService.create(newCreateReq("3号创建"));
         setCreatedAt(t1.getId(), day3.atTime(10, 0));
 
-        // day5 创建一条并完成（同一天创建+完成，应同时出现在 created 和 completed）
+        // day5 创建并完成（同一天创建+完成）：仅 day5 出现一次
         TodoVO t2 = todoService.create(newCreateReq("5号创建并完成"));
         setCreatedAt(t2.getId(), day5.atTime(9, 0));
         TodoStatusReq done = new TodoStatusReq();
@@ -339,7 +339,7 @@ class TodoServiceTest extends BaseTest {
         todoService.changeStatus(t2.getId(), done);
         setDoneAt(t2.getId(), day5.atTime(18, 0));
 
-        // 历史待办（上月创建），本月 day5 完成 → 应出现在 day5 的 completed 组
+        // 历史待办（上月创建），本月 day5 完成：覆盖本月 day1~day5
         TodoVO t3 = todoService.create(newCreateReq("历史待办本月5号完成"));
         setCreatedAt(t3.getId(), ym.minusMonths(1).atDay(20).atTime(8, 0));
         todoService.changeStatus(t3.getId(), done);
@@ -350,22 +350,57 @@ class TodoServiceTest extends BaseTest {
         assertEquals(month, result.getMonth());
         assertEquals(ym.lengthOfMonth(), result.getDays().size(), "应返回月份全部天数");
 
-        // day3：只有 created 含 t1
-        TodoMonthVO.DayGroup g3 = result.getDays().get(2);
-        assertEquals(day3, g3.getDate());
-        assertEquals(1, g3.getCreated().size());
-        assertEquals("3号创建", g3.getCreated().get(0).getTitle());
-        assertTrue(g3.getCompleted().isEmpty(), "day3 无完成记录");
+        // day1：t3 覆盖（上月20~本月5），t1/t2 尚未创建 -> 仅 t3
+        TodoMonthVO.DayGroup g1 = result.getDays().get(0);
+        List<String> day1Titles = g1.getTodos().stream().map(TodoVO::getTitle).toList();
+        assertTrue(day1Titles.contains("历史待办本月5号完成"), "跨月待办应覆盖 day1");
+        assertFalse(day1Titles.contains("3号创建"), "day1 尚未创建 t1");
 
-        // day5：created 含 t2，completed 含 t2 + t3
+        // day3：t1 当天创建 + t3 跨越覆盖 -> 2 条
+        TodoMonthVO.DayGroup g3 = result.getDays().get(2);
+        List<String> day3Titles = g3.getTodos().stream().map(TodoVO::getTitle).toList();
+        assertEquals(2, g3.getTodos().size(), "day3 应含 t1(当天创建) + t3(处理中)");
+        assertTrue(day3Titles.contains("3号创建"));
+        assertTrue(day3Titles.contains("历史待办本月5号完成"));
+
+        // day5：t1(处理中) + t2(当天创建并完成) + t3(当天完成) -> 3 条
         TodoMonthVO.DayGroup g5 = result.getDays().get(4);
-        assertEquals(day5, g5.getDate());
-        assertEquals(1, g5.getCreated().size(), "day5 created 应含 1 条");
-        assertEquals("5号创建并完成", g5.getCreated().get(0).getTitle());
-        assertEquals(2, g5.getCompleted().size(), "day5 completed 应含 2 条");
-        List<String> completedTitles = g5.getCompleted().stream().map(TodoVO::getTitle).toList();
-        assertTrue(completedTitles.contains("5号创建并完成"));
-        assertTrue(completedTitles.contains("历史待办本月5号完成"));
+        List<String> day5Titles = g5.getTodos().stream().map(TodoVO::getTitle).toList();
+        assertEquals(3, g5.getTodos().size(), "day5 应含 t1+t2+t3");
+        assertTrue(day5Titles.contains("3号创建"), "t1 覆盖 day5");
+        assertTrue(day5Titles.contains("5号创建并完成"));
+        assertTrue(day5Titles.contains("历史待办本月5号完成"));
+
+        // day6：t1(处理中) + t2(已完成，doneDate=day5 < day6 不覆盖) + t3(已完成，doneDate=day5 不覆盖) -> 仅 t1
+        TodoMonthVO.DayGroup g6 = result.getDays().get(5);
+        List<String> day6Titles = g6.getTodos().stream().map(TodoVO::getTitle).toList();
+        assertEquals(1, g6.getTodos().size(), "day6 仅 t1 处理中");
+        assertTrue(day6Titles.contains("3号创建"));
+    }
+
+    @Test
+    void monthCalendar_crossMonthPending_shouldAppearUntilToday() {
+        loginAsNewUser();
+        YearMonth ym = YearMonth.now();
+        String month = ym.toString();
+        LocalDate today = LocalDate.now();
+
+        // 跨月仍 pending：上月 20 号创建，至今未完成 -> 当月 day1 到今天都应出现，未来日不出现
+        TodoVO t = todoService.create(newCreateReq("跨月未完成"));
+        setCreatedAt(t.getId(), ym.minusMonths(1).atDay(20).atTime(8, 0));
+
+        TodoMonthVO result = todoService.monthCalendar(month);
+
+        for (TodoMonthVO.DayGroup g : result.getDays()) {
+            List<String> titles = g.getTodos().stream().map(TodoVO::getTitle).toList();
+            if (!g.getDate().isAfter(today)) {
+                assertTrue(titles.contains("跨月未完成"),
+                        "跨月未完成待办应覆盖当月至今天，day=" + g.getDate() + " 缺失");
+            } else {
+                assertFalse(titles.contains("跨月未完成"),
+                        "未来日期不应显示待办，day=" + g.getDate() + " 不该含");
+            }
+        }
     }
 
     @Test
@@ -378,8 +413,8 @@ class TodoServiceTest extends BaseTest {
 
         assertEquals(month, result.getMonth());
         assertEquals(YearMonth.now().lengthOfMonth(), result.getDays().size());
-        // 每天的 created/completed 都应为空
-        assertTrue(result.getDays().stream().allMatch(g -> g.getCreated().isEmpty() && g.getCompleted().isEmpty()));
+        // 每天的 todos 都应为空
+        assertTrue(result.getDays().stream().allMatch(g -> g.getTodos().isEmpty()));
     }
 
     @Test

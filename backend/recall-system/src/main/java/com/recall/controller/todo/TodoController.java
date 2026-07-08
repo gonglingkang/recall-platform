@@ -48,7 +48,7 @@ public class TodoController {
         return Result.ok(todoService.listToday());
     }
 
-    @Operation(summary = "月度待办日历", description = "按天分组返回指定月份的待办（当天创建+当天完成）")
+    @Operation(summary = "月度待办日历", description = "按天分组返回当月可见待办：含当天创建、当天完成，以及生命周期跨越当天的处理中待办（如跨月未来完成）")
     @GetMapping("/month")
     public Result<TodoMonthVO> month(@Parameter(description = "月份 YYYY-MM") @RequestParam("month") String month) {
         return Result.ok(todoService.monthCalendar(month));

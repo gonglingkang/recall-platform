@@ -128,33 +128,87 @@
           </div>
 
           <!-- Modal Body (List of todos for this day) -->
-          <div class="modal-body" style="max-height: 350px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px;">
-            <div v-if="dayTodos.length > 0" style="display: flex; flex-direction: column; gap: 10px;">
+          <div class="modal-body" style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 4px;">
+            <div v-if="groupedDayTodos.length > 0" style="display: flex; flex-direction: column; gap: 16px;">
+              <!-- Group Section -->
               <div 
-                v-for="todo in dayTodos" 
-                :key="todo.id" 
-                @click="openEditModal(todo)"
-                class="todo-list-row"
-                style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--border-light); border-radius: var(--radius-md); background: #f8fafc; cursor: pointer; transition: all 0.2s;"
+                v-for="group in groupedDayTodos" 
+                :key="group.id" 
+                class="category-group-section"
+                style="border-left: 3px solid; padding-left: 12px; display: flex; flex-direction: column; gap: 8px;"
+                :style="{ borderLeftColor: group.color }"
               >
-                <!-- Info -->
-                <div style="flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-                  <span 
-                    style="font-size: 14px; font-weight: 600; color: var(--text-main); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"
-                    :style="{ textDecoration: todo.status === 'done' ? 'line-through' : 'none', opacity: todo.status === 'done' ? 0.5 : 1 }"
-                  >
-                    {{ todo.title }}
+                <!-- Group Header -->
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                  <span style="font-size: 14px; font-weight: 800; color: var(--text-main);">{{ group.name }}</span>
+                  <span style="font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; background-color: #f1f5f9; color: #475569;">
+                    {{ group.totalCount }}
                   </span>
-                  
-                  <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                    <!-- Category Badge -->
-                    <span v-if="getCategoryName(todo)" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600;" :style="getCategoryStyle(todo)">
-                      {{ getCategoryName(todo) }}
-                    </span>
-                    <!-- Priority Badge -->
-                    <span class="badge" :class="`badge-${todo.priority}`" style="font-size: 11px; margin: 0;">
-                      {{ priorityLabel(todo.priority) }}
-                    </span>
+                </div>
+
+                <!-- Todos directly in parent category -->
+                <div v-if="group.todos.length > 0" style="display: flex; flex-direction: column; gap: 6px;">
+                  <div 
+                    v-for="todo in group.todos" 
+                    :key="todo.id" 
+                    @click="openEditModal(todo)"
+                    class="todo-list-row"
+                    style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: var(--radius-md); background: #f8fafc; cursor: pointer; transition: all 0.2s;"
+                  >
+                    <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                      <span 
+                        style="font-size: 13.5px; font-weight: 600; color: var(--text-main); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 60%;"
+                        :style="{ textDecoration: todo.status === 'done' ? 'line-through' : 'none', opacity: todo.status === 'done' ? 0.5 : 1 }"
+                        :title="todo.title"
+                      >
+                        {{ todo.title }}
+                      </span>
+                      <span class="badge" :class="`badge-${todo.priority}`" style="font-size: 10px; margin: 0; padding: 1px 5px; flex-shrink: 0;">
+                        {{ priorityLabel(todo.priority) }}
+                      </span>
+                      <span v-if="isHistorical(todo)" class="badge historical-badge" style="flex-shrink: 0; font-size: 10px; padding: 2px 6px; background-color: #fff2e8; border: 1px solid #ffbb96; color: #fa541c; font-weight: 600;" :title="`这是历史待办（创建于${getHistoricalDateLabel(todo)}），请优先处理！`">
+                        📅 {{ getHistoricalDateLabel(todo) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Subcategory groups -->
+                <div v-if="group.subgroups.length > 0" style="display: flex; flex-direction: column; gap: 8px; margin-top: 2px;">
+                  <div 
+                    v-for="subgroup in group.subgroups" 
+                    :key="subgroup.id"
+                    style="display: flex; flex-direction: column; gap: 6px; padding-left: 8px;"
+                  >
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--text-muted);">
+                      <span style="display: inline-block; width: 4px; height: 4px; border-radius: 50%;" :style="{ backgroundColor: group.color }"></span>
+                      <span>{{ subgroup.name }}</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                      <div 
+                        v-for="todo in subgroup.todos" 
+                        :key="todo.id" 
+                        @click="openEditModal(todo)"
+                        class="todo-list-row"
+                        style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: var(--radius-md); background: #f8fafc; cursor: pointer; transition: all 0.2s;"
+                      >
+                        <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                          <span 
+                            style="font-size: 13.5px; font-weight: 600; color: var(--text-main); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 60%;"
+                            :style="{ textDecoration: todo.status === 'done' ? 'line-through' : 'none', opacity: todo.status === 'done' ? 0.5 : 1 }"
+                            :title="todo.title"
+                          >
+                            {{ todo.title }}
+                          </span>
+                          <span class="badge" :class="`badge-${todo.priority}`" style="font-size: 10px; margin: 0; padding: 1px 5px; flex-shrink: 0;">
+                            {{ priorityLabel(todo.priority) }}
+                          </span>
+                          <span v-if="isHistorical(todo)" class="badge historical-badge" style="flex-shrink: 0; font-size: 10px; padding: 2px 6px; background-color: #fff2e8; border: 1px solid #ffbb96; color: #fa541c; font-weight: 600;" :title="`这是历史待办（创建于${getHistoricalDateLabel(todo)}），请优先处理！`">
+                            📅 {{ getHistoricalDateLabel(todo) }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -190,43 +244,19 @@
           </div>
 
           <div class="modal-form" style="display: flex; flex-direction: column; gap: 16px;">
-            <div class="form-field" style="display: flex; flex-direction: column; gap: 6px;">
-              <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">
-                待办标题 <span style="color: #ef4444; margin-left: 2px;">*</span>
-              </label>
-              <input 
-                v-model="editForm.title" 
-                type="text" 
-                disabled 
-                class="form-control" 
-                style="width: 100%; height: 42px; padding: 0 14px; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); font-size: 14px; color: var(--text-main); cursor: not-allowed; background-color: #ffffff;" 
-              />
-            </div>
-
-            <div class="form-field" style="display: flex; flex-direction: column; gap: 6px;">
-              <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">备注 (详细描述)</label>
-              <textarea 
-                v-model="editForm.content" 
-                rows="3" 
-                disabled 
-                class="form-control" 
-                style="width: 100%; padding: 12px 14px; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); font-size: 14px; color: var(--text-main); cursor: not-allowed; background-color: #ffffff; resize: none;"
-              ></textarea>
-            </div>
-
-            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <!-- Title & Priority side by side -->
+            <div style="display: grid; grid-template-columns: 2.2fr 1fr; gap: 16px; width: 100%;">
               <div class="form-field" style="display: flex; flex-direction: column; gap: 6px;">
-                <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">归属分类</label>
-                <!-- Readonly custom selector style -->
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); background: #ffffff; height: 42px; cursor: not-allowed; opacity: 1;">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%;" :style="{ backgroundColor: getEditCategoryColor }"></span>
-                    <span style="font-size: 14px; font-weight: 500; color: var(--text-main);">{{ getEditCategoryName || '无归属分类' }}</span>
-                  </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor" style="width: 14px; height: 14px; color: var(--text-muted);">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                  </svg>
-                </div>
+                <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">
+                  待办标题 <span style="color: #ef4444; margin-left: 2px;">*</span>
+                </label>
+                <input 
+                  v-model="editForm.title" 
+                  type="text" 
+                  disabled 
+                  class="form-control" 
+                  style="width: 100%; height: 42px; padding: 0 14px; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); font-size: 14px; color: var(--text-main); cursor: not-allowed; background-color: #ffffff;" 
+                />
               </div>
               <div class="form-field" style="display: flex; flex-direction: column; gap: 6px;">
                 <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">优先级</label>
@@ -240,6 +270,31 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                   </svg>
                 </div>
+              </div>
+            </div>
+
+            <div class="form-field" style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">备注 (详细描述)</label>
+              <textarea 
+                v-model="editForm.content" 
+                rows="3" 
+                disabled 
+                class="form-control" 
+                style="width: 100%; padding: 12px 14px; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); font-size: 14px; color: var(--text-main); cursor: not-allowed; background-color: #ffffff; resize: none;"
+              ></textarea>
+            </div>
+
+            <div class="form-field" style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">归属分类</label>
+              <!-- Readonly custom selector style -->
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); background: #ffffff; height: 42px; cursor: not-allowed; opacity: 1;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%;" :style="{ backgroundColor: getEditCategoryColor }"></span>
+                  <span style="font-size: 14px; font-weight: 500; color: var(--text-main);">{{ getEditCategoryName || '无归属分类' }}</span>
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor" style="width: 14px; height: 14px; color: var(--text-muted);">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
               </div>
             </div>
 
@@ -325,32 +380,21 @@ const monthlyTodosMap = ref<Record<string, Todo[]>>({})
 async function fetchMonthlyTodos() {
   if (!authStore.currentUser) return
   try {
+    if (!todoStore.categories || todoStore.categories.length === 0) {
+      await todoStore.refreshCategories(authStore.currentUser.userId)
+    }
     const res = await request.get<any, any>(`/api/todos/month?month=${currentMonthStr.value}`)
     const map: Record<string, Todo[]> = {}
     if (res.data && res.data.days) {
       res.data.days.forEach((group: any) => {
         const dateStr = group.date
-        const createdTodos = (group.created || []).map((vo: any) => 
+        const dayTodos = (group.todos || []).map((vo: any) => 
           mapTodoVOToTodo(vo, categories.value, todoStore.subcategoriesMap)
         )
-        const completedTodos = (group.completed || []).map((vo: any) => 
-          mapTodoVOToTodo(vo, categories.value, todoStore.subcategoriesMap)
-        )
-        
-        // Merge and deduplicate by id
-        const merged: Todo[] = [...createdTodos]
-        completedTodos.forEach((todo: Todo) => {
-          if (!merged.some(t => t.id === todo.id)) {
-            merged.push(todo)
-          }
-        })
-        
-        map[dateStr] = merged
+        map[dateStr] = dayTodos
       })
     }
     monthlyTodosMap.value = map
-
-
   } catch (e) {
     console.error('Failed to fetch monthly calendar:', e)
   }
@@ -455,6 +499,103 @@ const goToToday = () => {
 const isDayListModalOpen = ref(false)
 const selectedCellDate = ref('')
 const dayTodos = computed(() => monthlyTodosMap.value[selectedCellDate.value] || [])
+
+// Grouped day todos by Category (Parent & Subcategory)
+interface DayTodoGroup {
+  id: number | 'uncategorized'
+  name: string
+  color: string
+  todos: Todo[]
+  subgroups: {
+    id: number
+    name: string
+    todos: Todo[]
+  }[]
+  totalCount: number
+}
+
+const groupedDayTodos = computed(() => {
+  const groupsMap: Record<string | number, DayTodoGroup> = {}
+  
+  // Uncategorized group
+  const uncategorizedGroup: DayTodoGroup = {
+    id: 'uncategorized',
+    name: '未分类',
+    color: '#64748b',
+    todos: [],
+    subgroups: [],
+    totalCount: 0
+  }
+
+  dayTodos.value.forEach(todo => {
+    if (todo.categoryId === null) {
+      uncategorizedGroup.todos.push(todo)
+      uncategorizedGroup.totalCount++
+      return
+    }
+
+    const parentId = todo.categoryId
+    const parentCat = categories.value.find(c => c.id === parentId)
+    const catName = parentCat ? parentCat.name : '未知分类'
+    const catColor = parentCat ? parentCat.color : '#64748b'
+
+    if (!groupsMap[parentId]) {
+      groupsMap[parentId] = {
+        id: parentId,
+        name: catName,
+        color: catColor,
+        todos: [],
+        subgroups: [],
+        totalCount: 0
+      }
+    }
+
+    const group = groupsMap[parentId]
+    group.totalCount++
+
+    if (todo.subcategoryId === null) {
+      group.todos.push(todo)
+    } else {
+      const subId = todo.subcategoryId
+      const subList = todoStore.subcategoriesByCategoryId(parentId)
+      const subCat = subList.find(s => s.id === subId)
+      const subName = subCat ? subCat.name : '未知子分类'
+
+      let subgroup = group.subgroups.find(sg => sg.id === subId)
+      if (!subgroup) {
+        subgroup = {
+          id: subId,
+          name: subName,
+          todos: []
+        }
+        group.subgroups.push(subgroup)
+      }
+      subgroup.todos.push(todo)
+    }
+  })
+
+  // Order groups: categories list order, then uncategorized
+  const result: DayTodoGroup[] = []
+  
+  categories.value.forEach(cat => {
+    if (groupsMap[cat.id]) {
+      // Sort subgroups by subcategories list order
+      const subList = todoStore.subcategoriesByCategoryId(cat.id)
+      groupsMap[cat.id].subgroups.sort((a, b) => {
+        const idxA = subList.findIndex(s => s.id === a.id)
+        const idxB = subList.findIndex(s => s.id === b.id)
+        return idxA - idxB
+      })
+      result.push(groupsMap[cat.id])
+    }
+  })
+
+  if (uncategorizedGroup.todos.length > 0) {
+    result.push(uncategorizedGroup)
+  }
+
+  return result
+})
 
 const openDayListModal = (dateStr: string) => {
   selectedCellDate.value = dateStr
@@ -573,6 +714,20 @@ const priorityLabel = (prio: string) => {
   if (prio === 'high') return '高'
   if (prio === 'medium') return '中'
   return '低'
+}
+
+const getHistoricalDateLabel = (todo: Todo) => {
+  if (!todo.createdAt) return ''
+  const dateObj = new Date(todo.createdAt)
+  const month = dateObj.getMonth() + 1
+  const date = dateObj.getDate()
+  return `${month}月${date}日`
+}
+
+const isHistorical = (todo: Todo) => {
+  if (!todo.createdAt || !selectedCellDate.value) return false
+  const createdDateStr = todo.createdAt.split('T')[0]
+  return createdDateStr < selectedCellDate.value
 }
 
 const getCategoryName = (todo: Todo) => {
