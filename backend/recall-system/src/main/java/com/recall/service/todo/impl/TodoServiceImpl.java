@@ -17,6 +17,7 @@ import com.recall.entity.todo.Todo;
 import com.recall.enums.Priority;
 import com.recall.enums.TodoStatus;
 import com.recall.service.category.CategoryService;
+import com.recall.service.daily.DailyReportItemTodoService;
 import com.recall.service.todo.TodoService;
 import com.recall.vo.todo.TodoMonthVO;
 import com.recall.vo.todo.TodoVO;
@@ -24,11 +25,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +52,7 @@ public class TodoServiceImpl implements TodoService {
      */
     @Lazy
     private final CategoryService categoryService;
+    private final DailyReportItemTodoService dailyReportItemTodoService;
 
     // ===================== 查询 =====================
 
@@ -129,7 +133,7 @@ public class TodoServiceImpl implements TodoService {
                         }
                     }
                     // pending 待办区间上界为今天，已在 d <= today 保证下；done 待办上界为 doneDate，上面已校验
-                    dayTodos.add(toVO(todo));
+                    dayTodos.add(toVOForDay(todo, d));
                 }
             }
             days.add(TodoMonthVO.DayGroup.builder()
@@ -251,10 +255,18 @@ public class TodoServiceImpl implements TodoService {
         return toVO(todo);
     }
 
+    /**
+     * 删除待办（物理删除，不可恢复）。
+     * <p>连带清理日报对该待办的关联记录，避免悬空关联（多条写 -> 事务）。
+     *
+     * @param id 待办 ID
+     */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
-        // 物理删除，不可恢复。单条写（deleteById），无需事务（见 backend-code-standards 事务规则）
         loadOwned(id);
+        // 级联清理日报关联（走 DailyReportItemTodoService 接口，不直接碰其 Mapper）
+        dailyReportItemTodoService.deleteByTodoId(id);
         todoMapper.deleteById(id);
     }
 
@@ -297,6 +309,86 @@ public class TodoServiceImpl implements TodoService {
         }
         Long count = todoMapper.selectCount(wrapper);
         return count == null ? 0L : count;
+    }
+
+    /**
+     * 查询指定日期当天的待办（按当天真实状态返回）。
+     * <p>
+     * 纳入生命周期区间覆盖当天的待办：创建于当天及之前（createdAt < 次日0点），
+     * 且尚未完成（doneAt 为空）或当天及之后才完成（doneAt >= 当天0点）。
+     * 未来日期返回空列表。
+     * <p>
+     * 返回的 status/doneAt 为「当天状态快照」：doneAt ≤ date 当天 -> done，
+     * 否则（doneAt 为空或晚于 date）-> pending 且 doneAt 返回 null。
+     */
+    @Override
+    public List<TodoVO> listByDate(LocalDate date) {
+        // 未来日期无可见待办（与 monthCalendar 单日分支一致）
+        if (date.isAfter(LocalDate.now())) {
+            return Collections.emptyList();
+        }
+        Long userId = UserContextHolder.requireUserId();
+        LambdaQueryWrapper<Todo> wrapper = new LambdaQueryWrapper<Todo>()
+                .eq(Todo::getUserId, userId)
+                // 创建于当天及之前：createdAt < 次日0点
+                .lt(Todo::getCreatedAt, date.plusDays(1).atStartOfDay())
+                // 仍 pending（doneAt 为空）或当天及之后才完成
+                .and(w -> w.isNull(Todo::getDoneAt)
+                        .or().ge(Todo::getDoneAt, date.atStartOfDay()));
+        applyDefaultSort(wrapper);
+        return todoMapper.selectList(wrapper).stream().map(t -> toVOOnDate(t, date)).toList();
+    }
+
+    /**
+     * 将待办转为「指定日期当天状态快照」VO。
+     * <p>
+     * doneAt ≤ date 当天 -> status=done，doneAt 保留真实值；
+     * 否则（doneAt 为空或晚于 date）-> status=pending，doneAt 返回 null。
+     *
+     * @param todo 待办实体（当前值）
+     * @param date 目标日期
+     * @return 当天状态快照 VO
+     */
+    private TodoVO toVOOnDate(Todo todo, LocalDate date) {
+        boolean doneOnDate = todo.getDoneAt() != null
+                && !todo.getDoneAt().toLocalDate().isAfter(date);
+        return TodoVO.builder()
+                .id(todo.getId())
+                .title(todo.getTitle())
+                .note(todo.getNote())
+                .categoryId(todo.getCategoryId())
+                .priority(todo.getPriority())
+                .status(doneOnDate ? TodoStatus.DONE.getValue() : TodoStatus.PENDING.getValue())
+                .doneAt(doneOnDate ? todo.getDoneAt() : null)
+                .createdAt(todo.getCreatedAt())
+                .updatedAt(todo.getUpdatedAt())
+                .build();
+    }
+
+    /**
+     * 按 id 批量查询待办实体（供 Service 间内部调用，禁止透传至 Controller/前端）。
+     */
+    @Override
+    public List<Todo> listByIds(List<Long> ids, boolean checkOwnership) {
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Todo> todos = todoMapper.selectList(new LambdaQueryWrapper<Todo>()
+                .in(Todo::getId, ids));
+        if (!checkOwnership) {
+            return todos;
+        }
+        // 越权统一 404：数量不符直接判为存在不属于当前用户的 id（不暴露具体哪个）
+        if (todos.size() != ids.size()) {
+            throw new BusinessException(ResultCode.NOT_FOUND);
+        }
+        Long userId = UserContextHolder.requireUserId();
+        for (Todo todo : todos) {
+            if (!userId.equals(todo.getUserId())) {
+                throw new BusinessException(ResultCode.NOT_FOUND);
+            }
+        }
+        return todos;
     }
 
     // ===================== 辅助 =====================
@@ -372,5 +464,33 @@ public class TodoServiceImpl implements TodoService {
                 .createdAt(todo.getCreatedAt())
                 .updatedAt(todo.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * 构造待办在指定日期 D 的历史状态快照（供日历视图按天展示）。
+     * <p>
+     * 待办当前已 done，但 doneAt 落在 D 之后（D 当天尚未完成）时，当天应展示为 pending、doneAt=null。
+     * 否则按当前实体返回（pending 待办天然 pending；done 且 doneAt≤D 时返回 done + 真实 doneAt）。
+     *
+     * @param todo 待办实体（当前实时状态）
+     * @param day  要展示的日期
+     * @return 当天历史状态快照 VO
+     */
+    private TodoVO toVOForDay(Todo todo, LocalDate day) {
+        if (todo.getDoneAt() != null && todo.getDoneAt().toLocalDate().isAfter(day)) {
+            // 当天尚未完成：返回 pending 快照
+            return TodoVO.builder()
+                    .id(todo.getId())
+                    .title(todo.getTitle())
+                    .note(todo.getNote())
+                    .categoryId(todo.getCategoryId())
+                    .priority(todo.getPriority())
+                    .status(TodoStatus.PENDING.getValue())
+                    .doneAt(null)
+                    .createdAt(todo.getCreatedAt())
+                    .updatedAt(todo.getUpdatedAt())
+                    .build();
+        }
+        return toVO(todo);
     }
 }

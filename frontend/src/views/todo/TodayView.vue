@@ -932,26 +932,17 @@ onMounted(() => {
     todoStore.refreshCategories(authStore.currentUser.userId)
     todoStore.refreshTodayTodos(authStore.currentUser.userId)
     
-    // Load preferences
-    const stored = localStorage.getItem(`recall_prefs_${authStore.currentUser.userId}`)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      addForm.priority = parsed.defaultPriority || 'medium'
-      addForm.categoryId = parsed.defaultCategoryId !== undefined ? parsed.defaultCategoryId : null
-      addForm.subcategoryId = null
-    } else {
-      // Default to first category if exists
-      addForm.categoryId = categories.value.length > 0 ? categories.value[0].id : null
-      addForm.subcategoryId = null
-    }
+    // Default to first category if exists
+    addForm.priority = 'medium'
+    addForm.categoryId = categories.value.length > 0 ? categories.value[0].id : null
+    addForm.subcategoryId = null
   }
 })
 
-// Watch categories to select first one if no preferences are stored and no choice made yet
+// Watch categories to select first one if no choice made yet
 watch(categories, (newCats) => {
   if (authStore.currentUser) {
-    const stored = localStorage.getItem(`recall_prefs_${authStore.currentUser.userId}`)
-    if (!stored && addForm.categoryId === null && newCats.length > 0) {
+    if (addForm.categoryId === null && newCats.length > 0) {
       addForm.categoryId = newCats[0].id
       addForm.subcategoryId = null
     }

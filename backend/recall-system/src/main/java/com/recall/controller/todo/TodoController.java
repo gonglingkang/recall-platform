@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -52,6 +54,13 @@ public class TodoController {
     @GetMapping("/month")
     public Result<TodoMonthVO> month(@Parameter(description = "月份 YYYY-MM") @RequestParam("month") String month) {
         return Result.ok(todoService.monthCalendar(month));
+    }
+
+    @Operation(summary = "按日期查待办", description = "返回指定日期当天的待办（状态为当天真实快照）：含当天创建、当天完成、当天仍 pending、当天未完成但未来才完成（当天状态为 pending）；未来日期返回空")
+    @GetMapping("/by-date/{date}")
+    public Result<List<TodoVO>> byDate(@Parameter(description = "日期 YYYY-MM-DD")
+                                       @PathVariable @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
+        return Result.ok(todoService.listByDate(date));
     }
 
     @Operation(summary = "待办分页查询", description = "支持按分类（联动子分类）、优先级、完成状态、关键词过滤，所有条件 AND 生效；分页返回")

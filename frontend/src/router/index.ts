@@ -73,6 +73,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/plan/SprintView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/daily-report/:month?',
+    name: 'daily-report',
+    component: () => import('@/views/plan/DailyReportView.vue'),
+    meta: { requiresAuth: true },
+  },
 
   {
     path: '/settings',

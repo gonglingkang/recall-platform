@@ -5,9 +5,11 @@ import com.recall.dto.todo.TodoCreateReq;
 import com.recall.dto.todo.TodoListReq;
 import com.recall.dto.todo.TodoStatusReq;
 import com.recall.dto.todo.TodoUpdateReq;
+import com.recall.entity.todo.Todo;
 import com.recall.vo.todo.TodoMonthVO;
 import com.recall.vo.todo.TodoVO;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -123,4 +125,31 @@ public interface TodoService {
      * @return 未完成待办数量
      */
     long countPending(Long categoryId);
+
+    /**
+     * 查询指定日期当天的待办（按当天真实状态返回）。
+     * <p>
+     * 纳入生命周期区间覆盖当天的待办：当天创建、当天完成、当天仍 pending、
+     * 当天未完成但未来才完成（这种当天状态为 pending）。
+     * <p>
+     * 返回的 status/doneAt 为「当天状态快照」，非当前值：
+     * <ul>
+     *   <li>doneAt ≤ date 当天 -> status=done，doneAt 保留真实值</li>
+     *   <li>doneAt 为空 或 doneAt 在 date 之后 -> status=pending，doneAt 返回 null</li>
+     * </ul>
+     * 未来日期返回空列表（未来无可见待办）。
+     *
+     * @param date 日期
+     * @return 当天可见的待办列表（状态为当天快照）
+     */
+    List<TodoVO> listByDate(LocalDate date);
+
+    /**
+     * 按 id 批量查询待办实体（供 Service 间内部调用，禁止透传至 Controller/前端）。
+     *
+     * @param ids            待办 ID 列表
+     * @param checkOwnership 是否校验归属；true 时任一不存在或不属于当前用户均抛 404（越权统一 404）
+     * @return 待办实体列表
+     */
+    List<Todo> listByIds(List<Long> ids, boolean checkOwnership);
 }

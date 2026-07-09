@@ -31,6 +31,10 @@ public enum ResultCode {
     OLD_PASSWORD_WRONG(4105, "原密码错误"),
     TODO_TITLE_DUPLICATED(4201, "今天已存在同名待办"),
 
+    // --- 日报错误 46xx ---
+    DAILY_REPORT_FUTURE_DATE(4601, "不能填写未来日期的日报"),
+    DAILY_TODO_NOT_RELATED(4602, "待办在该日期不可关联"),
+
     // --- 服务器错误 5xx ---
     INTERNAL_ERROR(500, "服务器内部错误"),
     SERVICE_UNAVAILABLE(503, "服务暂不可用");

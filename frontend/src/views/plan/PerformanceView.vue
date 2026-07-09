@@ -25,11 +25,11 @@
           </div>
 
           <!-- Export Button -->
-          <button class="export-data-btn" @click="handleExportData" title="导出本月绩效为 CSV 表格">
+          <button class="export-data-btn" @click="generatePerformanceChecklist" title="生成本月绩效清单">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="btn-icon">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
             </svg>
-            <span>导出绩效数据</span>
+            <span>生成绩效清单</span>
           </button>
 
           <!-- New Objective Button -->
@@ -531,6 +531,55 @@
       </div>
     </div>
 
+    <!-- 4. Generate Performance Checklist Modal -->
+    <div v-if="isChecklistModalOpen" class="modal-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (isChecklistModalOpen = false)">
+      <div class="modal-content" @click.stop style="max-width: 600px; padding: 24px; display: flex; flex-direction: column; max-height: 85vh; gap: 8px;">
+        <div class="modal-header-with-close" style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+          <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: var(--text-main);">生成绩效清单</h3>
+          <button class="modal-close-icon-btn" @click="isChecklistModalOpen = false" title="关闭弹窗" style="background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 18px; height: 18px;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <p style="font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5; flex-shrink: 0;">
+          已为您自动整理并生成本月绩效清单内容，可直接复制使用：
+        </p>
+        
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding-right: 6px; flex-grow: 1; margin-bottom: 8px;">
+          <div v-for="(sec, idx) in checklistSections" :key="idx" style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background-color: var(--primary);"></span>
+                {{ sec.title }}
+              </h4>
+              <button 
+                class="btn btn-secondary" 
+                @click="copyText(sec.text)"
+                style="padding: 2px 10px; font-size: 11px; height: 26px; display: flex; align-items: center; gap: 4px; border-color: var(--border-medium); border-radius: var(--radius-sm);"
+                title="复制该目标的清单内容"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 12px; height: 12px;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                </svg>
+                <span>复制</span>
+              </button>
+            </div>
+            <textarea 
+              readonly 
+              v-model="sec.text" 
+              :rows="sec.text ? Math.min(Math.max(sec.text.split('\n').length, 3), 10) : 2" 
+              class="form-control" 
+              style="width: 100%; font-family: monospace; font-size: 13px; line-height: 1.6; padding: 12px; background-color: #f8fafc; border: 1.5px solid var(--border-medium); border-radius: 8px; resize: none; color: var(--text-main);"
+              @click="($event.target as HTMLTextAreaElement).select()"
+              title="点击全选该部分内容"
+            ></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 3. Performance Category Management Drawer (PRD 6.8.1 / Issue 3) -->
     <transition name="drawer-slide">
       <div v-if="isPerfCatDrawerOpen" class="drawer-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (isPerfCatDrawerOpen = false)">
@@ -735,6 +784,10 @@ const viewRModal = reactive({
   krTitle: '',
   records: [] as string[]
 })
+
+const isChecklistModalOpen = ref(false)
+const checklistText = ref('')
+const checklistSections = ref([] as { title: string; text: string }[])
 
 // Custom Dropdown logic for KR Status
 const isStatusDropdownOpen = ref(false)
@@ -1324,40 +1377,99 @@ const openKRModalWithCat = (catId: number) => {
   krModal.isOpen = true
 }
 
-// Export performance data to CSV
-const handleExportData = () => {
+const toChineseNumeral = (num: number): string => {
+  const chineseNumerals = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+  if (num <= 10) return chineseNumerals[num];
+  if (num < 20) return '十' + (num % 10 === 0 ? '' : chineseNumerals[num % 10]);
+  if (num < 100) {
+    const ten = Math.floor(num / 10);
+    const one = num % 10;
+    return chineseNumerals[ten] + '十' + (one === 0 ? '' : chineseNumerals[one]);
+  }
+  return String(num);
+}
+
+// Generate structured performance checklist
+const generatePerformanceChecklist = () => {
   if (performanceKRs.value.length === 0 && performanceCategories.value.length === 0) {
-    showAlert('暂无绩效数据可导出！')
+    showAlert('暂无绩效数据可生成清单！')
     return
   }
   
-  let csvContent = '\uFEFF' // UTF-8 BOM to prevent garbled text in Excel
-  csvContent += '目标编号,目标名称,目标进度,关键成果编号,关键成果标题,关键成果状态,完成时间,备注说明\n'
+  const sections: { title: string; text: string }[] = []
   
   objectivesList.value.forEach(obj => {
-    if (obj.items.length === 0) {
-      csvContent += `O${obj.keyIndex},"${obj.name.replace(/"/g, '""')}",${obj.progress}%,-, -, -, -, -\n`
-    } else {
-      obj.items.forEach(kr => {
-        const krStatusLabel = kr.status === 'done' ? '已完成' : (kr.status === 'cancelled' ? '已取消' : (kr.status === 'in_progress' ? '进行中' : '未开始'))
-        const krDoneDate = kr.doneAt || '-'
-        csvContent += `O${obj.keyIndex},"${obj.name.replace(/"/g, '""')}",${obj.progress}%,K${kr.keyIndex},"${kr.title.replace(/"/g, '""')}",${krStatusLabel},${krDoneDate},"${(kr.remark || '').replace(/"/g, '""')}"\n`
-      })
+    // Filter KRs that are not cancelled
+    const activeKRs = obj.items.filter(kr => kr.status !== 'cancelled')
+    
+    let objText = ''
+    activeKRs.forEach((kr, krIdx) => {
+      // 工作一, 工作二, etc.
+      const workNum = toChineseNumeral(krIdx + 1)
+      objText += `[工作${workNum}]${kr.title}\n`
+      
+      // Determine progress using getDerivedStats completed/total or status
+      let progress = 0
+      if (kr.status === 'done') {
+        progress = 100
+      } else if (kr.status === 'in_progress') {
+        const stats = getDerivedStats(kr)
+        progress = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 50
+      }
+      
+      // Format R content or use default if not started
+      if (kr.status === 'not_started') {
+        objText += `完成进度：由于该功能从产品层面那边暂时没有完整的功能内容，无法提前知道具体方向，无法完成该功能的设计和实现，进度0%\n`
+      } else {
+        let rContent = ''
+        if (kr.records && kr.records.length > 0) {
+          rContent = kr.records.map((r, i) => `(${i + 1})${r}`).join('')
+        } else {
+          rContent = '进行中，相关工作正在推进'
+        }
+        objText += `完成进度：${rContent}，进度${progress}%\n`
+      }
+    })
+    
+    // Trim final newline
+    if (objText.endsWith('\n')) {
+      objText = objText.substring(0, objText.length - 1)
     }
+    
+    sections.push({
+      title: obj.name,
+      text: objText
+    })
   })
   
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.setAttribute('href', url)
-  link.setAttribute('download', `个人绩效数据_${selectedMonth.value}.csv`)
-  link.style.visibility = 'hidden'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  checklistSections.value = sections
   
-  const event = new CustomEvent('app-toast', { detail: { text: '绩效数据已成功导出为 CSV 文件！' } })
-  window.dispatchEvent(event)
+  // Combine for full copying
+  let fullText = ''
+  sections.forEach((sec, idx) => {
+    fullText += `${sec.title}\n${sec.text}`
+    if (idx < sections.length - 1) {
+      fullText += '\n\n'
+    }
+  })
+  checklistText.value = fullText
+  isChecklistModalOpen.value = true
+}
+
+const copyText = async (val: string) => {
+  if (!val) {
+    const event = new CustomEvent('app-toast', { detail: { text: '内容为空，无需复制。', type: 'error' } })
+    window.dispatchEvent(event)
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(val)
+    const event = new CustomEvent('app-toast', { detail: { text: '已复制当前目标清单！' } })
+    window.dispatchEvent(event)
+  } catch (err) {
+    const event = new CustomEvent('app-toast', { detail: { text: '复制失败，请手动选择复制。', type: 'error' } })
+    window.dispatchEvent(event)
+  }
 }
 </script>
 

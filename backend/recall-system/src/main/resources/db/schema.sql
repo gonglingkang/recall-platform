@@ -163,3 +163,56 @@ CREATE TABLE `key_result_records` (
     PRIMARY KEY (`id`),
     KEY `idx_key_result` (`key_result_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='关键成果成果记录R表';
+
+-- ---------------------------------------------------------------------
+-- 9.8 日报主表 daily_reports（日报 v1.0）
+-- 一天一份日报，主表只记录日期；工作内容存 daily_report_items，关联待办存
+-- daily_report_item_todos。report_date 不可为未来（后端校验）。
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `daily_reports`;
+CREATE TABLE `daily_reports` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`     BIGINT       NOT NULL COMMENT '所属用户(数据隔离)',
+    `report_date` DATE         NOT NULL COMMENT '日报日期(自然日,不可为未来)',
+    `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    -- 一天一份：同用户同日期唯一
+    UNIQUE KEY `uk_user_date` (`user_id`, `report_date`),
+    KEY `idx_user_date` (`user_id`, `report_date`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='日报主表';
+
+-- ---------------------------------------------------------------------
+-- 日报工作内容项表 daily_report_items（归属于日报）
+-- 全量覆盖编辑：保存日报时先删后插，排序按 id 升序（插入顺序）。
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `daily_report_items`;
+CREATE TABLE `daily_report_items` (
+    `id`         BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`    BIGINT        NOT NULL COMMENT '所属用户(数据隔离)',
+    `report_id`  BIGINT        NOT NULL COMMENT '归属日报ID',
+    `content`    VARCHAR(2000) NOT NULL COMMENT '工作内容',
+    `progress`   INT           NOT NULL DEFAULT 0 COMMENT '进度百分比 0-100',
+    `created_at` DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_report` (`report_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='日报工作内容项表';
+
+-- ---------------------------------------------------------------------
+-- 日报项-待办关联表 daily_report_item_todos（多对多）
+-- 一条工作内容可关联 0~N 个待办；保存日报时随日报项全量覆盖。
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `daily_report_item_todos`;
+CREATE TABLE `daily_report_item_todos` (
+    `id`         BIGINT   NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`    BIGINT   NOT NULL COMMENT '所属用户(数据隔离)',
+    `item_id`    BIGINT   NOT NULL COMMENT '日报项ID',
+    `todo_id`    BIGINT   NOT NULL COMMENT '待办ID',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    -- 同一日报项下同一待办不重复关联
+    UNIQUE KEY `uk_item_todo` (`item_id`, `todo_id`),
+    KEY `idx_todo` (`todo_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='日报项-待办关联表';

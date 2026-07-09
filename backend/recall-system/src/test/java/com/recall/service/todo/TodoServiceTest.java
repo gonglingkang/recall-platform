@@ -404,6 +404,44 @@ class TodoServiceTest extends BaseTest {
     }
 
     @Test
+    void monthCalendar_shouldReturnHistoricalStatusPerDay() {
+        loginAsNewUser();
+        YearMonth ym = YearMonth.now();
+        String month = ym.toString();
+        LocalDate day3 = ym.atDay(3);
+        LocalDate day5 = ym.atDay(5);
+        LocalDate day6 = ym.atDay(6);
+
+        // day3 创建，day6 完成 -> day3/day5 应展示 pending，day6 应展示 done
+        TodoVO t = todoService.create(newCreateReq("历史状态快照"));
+        setCreatedAt(t.getId(), day3.atTime(9, 0));
+        TodoStatusReq done = new TodoStatusReq();
+        done.setStatus(TodoStatus.DONE);
+        todoService.changeStatus(t.getId(), done);
+        setDoneAt(t.getId(), day6.atTime(18, 0));
+
+        TodoMonthVO result = todoService.monthCalendar(month);
+
+        // day5（完成前）：应返回 pending、doneAt=null
+        TodoMonthVO.DayGroup g5 = result.getDays().get(day5.getDayOfMonth() - 1);
+        TodoVO day5Todo = g5.getTodos().stream().filter(x -> x.getId().equals(t.getId())).findFirst().orElseThrow();
+        assertEquals("0", day5Todo.getStatus(), "完成日之前应展示为 pending");
+        assertNull(day5Todo.getDoneAt(), "完成日之前 doneAt 应为 null");
+
+        // day6（完成当天）：应返回 done、doneAt=day6
+        TodoMonthVO.DayGroup g6 = result.getDays().get(day6.getDayOfMonth() - 1);
+        TodoVO day6Todo = g6.getTodos().stream().filter(x -> x.getId().equals(t.getId())).findFirst().orElseThrow();
+        assertEquals("1", day6Todo.getStatus(), "完成当天应展示为 done");
+        assertNotNull(day6Todo.getDoneAt(), "完成当天 doneAt 应有值");
+
+        // day3（创建当天，尚未完成）：应返回 pending
+        TodoMonthVO.DayGroup g3 = result.getDays().get(day3.getDayOfMonth() - 1);
+        TodoVO day3Todo = g3.getTodos().stream().filter(x -> x.getId().equals(t.getId())).findFirst().orElseThrow();
+        assertEquals("0", day3Todo.getStatus(), "创建当天尚未完成应展示为 pending");
+        assertNull(day3Todo.getDoneAt());
+    }
+
+    @Test
     void monthCalendar_emptyMonth_shouldReturnFullDaysWithEmptyGroups() {
         loginAsNewUser();
         String month = YearMonth.now().toString();

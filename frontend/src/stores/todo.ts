@@ -27,6 +27,7 @@ export interface Category {
   name: string
   color: string
   order: number
+  createdAt?: string
 }
 
 export interface Subcategory {
@@ -135,7 +136,8 @@ export const useTodoStore = defineStore('todo', {
               userId,
               name: cat.name,
               color: cat.color,
-              order: cat.sortOrder || 0
+              order: cat.sortOrder || 0,
+              createdAt: cat.createdAt
             })
             subMap[Number(cat.id)] = (cat.subcategories || []).map((sub: any) => ({
               id: Number(sub.id),
@@ -295,6 +297,19 @@ export const useTodoStore = defineStore('todo', {
       } catch (e) {
         console.error(`Failed to fetch todos for category ${categoryId}:`, e)
         return null
+      }
+    },
+
+    async fetchTodosByDate(date: string) {
+      try {
+        const res = await request.get<any[], ApiResult<any[]>>(`/api/todos/by-date/${date}`)
+        if (res && res.code === 200 && res.data) {
+          return res.data.map((vo: any) => mapTodoVOToTodo(vo, this.categories, this.subcategoriesMap))
+        }
+        return []
+      } catch (err) {
+        console.error('Failed to fetch todos by date:', err)
+        return []
       }
     },
 

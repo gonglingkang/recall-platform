@@ -97,73 +97,6 @@
           </button>
         </form>
       </div>
-
-      <!-- 3. Preference Settings Card (PRD 6.9.3 / Issue 5) -->
-      <div class="settings-card premium-card full-width">
-        <h3>⚙️ 偏好与系统选项</h3>
-        <p class="card-sub">配置您的日常浏览器端运行提醒及待办创建的默认初始值</p>
-        
-        <div class="preference-list">
-          <div class="pref-item">
-            <div class="pref-text">
-              <h4>开启 Web 提醒通知</h4>
-              <p>当待办任务设定的提醒时间到达时，在浏览器中触发横幅通知高亮推送。</p>
-            </div>
-            <label class="toggle-control">
-              <input type="checkbox" v-model="preferences.notificationEnabled" />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-
-          <div class="pref-item">
-            <div class="pref-text">
-              <h4>置顶事项始终处于视图最顶部</h4>
-              <p>开启后，置顶的任务（📌）在今日待办和分类列表中自动升至最高排序优先级。</p>
-            </div>
-            <label class="toggle-control">
-              <input type="checkbox" v-model="preferences.pinToTop" />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-
-          <!-- Default Priority Preference -->
-          <div class="pref-item dropdown-pref">
-            <div class="pref-text">
-              <h4>默认任务优先级</h4>
-              <p>在快速创建新待办事项时，自动选中此项作为初始任务优先级。</p>
-            </div>
-            <div class="pref-selector-wrap">
-              <select v-model="preferences.defaultPriority" class="form-control pref-select-field">
-                <option value="high">🔴 高优先级</option>
-                <option value="medium">🟡 中优先级</option>
-                <option value="low">🟢 低优先级</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Default Category Preference -->
-          <div class="pref-item dropdown-pref">
-            <div class="pref-text">
-              <h4>默认所属大分类</h4>
-              <p>在快速创建新待办事项时，自动选中此分类大项（未设默认为无分类或首个分类）。</p>
-            </div>
-            <div class="pref-selector-wrap">
-              <select v-model="preferences.defaultCategoryId" class="form-control pref-select-field">
-                <option :value="null">无分类 (或按公司事务)</option>
-                <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-                  📂 {{ cat.name }}
-                </option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div class="pref-save-bar">
-          <button class="submit-btn pref-save-btn" @click="savePreferences">
-            💾 保存偏好与系统设置
-          </button>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -195,28 +128,12 @@ const pwdForm = reactive({
   confirmPassword: ''
 })
 
-const preferences = reactive({
-  defaultPriority: 'medium' as 'high' | 'medium' | 'low',
-  defaultCategoryId: null as number | null,
-  notificationEnabled: true,
-  pinToTop: true
-})
-
 onMounted(() => {
   if (authStore.currentUser) {
     profileForm.nickname = authStore.currentUser.nickname || authStore.currentUser.username
     profileForm.email = authStore.currentUser.email || ''
     // Load categories for selector
     todoStore.refreshCategories(authStore.currentUser.userId)
-    // Load preferences
-    const stored = localStorage.getItem(`recall_prefs_${authStore.currentUser.userId}`)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      preferences.defaultPriority = parsed.defaultPriority || 'medium'
-      preferences.defaultCategoryId = parsed.defaultCategoryId !== undefined ? parsed.defaultCategoryId : null
-      preferences.notificationEnabled = parsed.notificationEnabled !== undefined ? parsed.notificationEnabled : true
-      preferences.pinToTop = parsed.pinToTop !== undefined ? parsed.pinToTop : true
-    }
   }
 })
 
@@ -272,11 +189,7 @@ const handleUpdatePassword = async () => {
   }
 }
 
-const savePreferences = () => {
-  if (!authStore.currentUser) return
-  localStorage.setItem(`recall_prefs_${authStore.currentUser.userId}`, JSON.stringify(preferences))
-  triggerAlert('success', '⚙️ 系统偏好与快速创建的默认值已成功保存！')
-}
+
 </script>
 
 <style scoped>
