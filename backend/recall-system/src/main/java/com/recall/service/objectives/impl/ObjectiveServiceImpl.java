@@ -11,6 +11,7 @@ import com.recall.entity.objectives.KeyResult;
 import com.recall.entity.objectives.Objective;
 import com.recall.entity.sprint.SprintKeyResult;
 import com.recall.enums.KeyResultStatus;
+import com.recall.service.objectives.KeyResultRecordService;
 import com.recall.service.objectives.KeyResultService;
 import com.recall.service.objectives.ObjectiveService;
 import com.recall.service.sprint.SprintKeyResultService;
@@ -52,6 +53,7 @@ public class ObjectiveServiceImpl implements ObjectiveService {
     private final ObjectiveMapper objectiveMapper;
     private final KeyResultService keyResultService;
     private final SprintKeyResultService sprintKeyResultService;
+    private final KeyResultRecordService keyResultRecordService;
 
     // ===================== 目标 O =====================
 
@@ -79,8 +81,14 @@ public class ObjectiveServiceImpl implements ObjectiveService {
                         .collect(Collectors.groupingBy(
                                 SprintKeyResult::getKeyResultId,
                                 Collectors.mapping(SprintKeyResult::getSprintId, Collectors.toList())));
+        // 批量查出这些 K 的成果记录 R，按 keyResultId 分组
+        Map<Long, List<String>> recordsByKrId = allKrs.isEmpty()
+                ? Collections.emptyMap()
+                : keyResultRecordService.listContentsByKeyResultIds(
+                        allKrs.stream().map(KeyResult::getId).toList());
         return objectives.stream()
-                .map(o -> toVO(o, krMap.getOrDefault(o.getId(), Collections.emptyList()), sprintIdsByKrId))
+                .map(o -> toVO(o, krMap.getOrDefault(o.getId(), Collections.emptyList()),
+                        sprintIdsByKrId, recordsByKrId))
                 .toList();
     }
 
@@ -97,7 +105,7 @@ public class ObjectiveServiceImpl implements ObjectiveService {
         o.setName(req.getName());
         o.setDescription(req.getDescription());
         objectiveMapper.insert(o);
-        return toVO(o, Collections.emptyList(), Collections.emptyMap());
+        return toVO(o, Collections.emptyList(), Collections.emptyMap(), Collections.emptyMap());
     }
 
     @Override
@@ -120,7 +128,11 @@ public class ObjectiveServiceImpl implements ObjectiveService {
                         .collect(Collectors.groupingBy(
                                 SprintKeyResult::getKeyResultId,
                                 Collectors.mapping(SprintKeyResult::getSprintId, Collectors.toList())));
-        return toVO(o, krs, sprintIdsByKrId);
+        Map<Long, List<String>> recordsByKrId = krs.isEmpty()
+                ? Collections.emptyMap()
+                : keyResultRecordService.listContentsByKeyResultIds(
+                        krs.stream().map(KeyResult::getId).toList());
+        return toVO(o, krs, sprintIdsByKrId, recordsByKrId);
     }
 
     @Override
@@ -147,8 +159,10 @@ public class ObjectiveServiceImpl implements ObjectiveService {
      * @param o               目标实体
      * @param krs             其下 K 列表
      * @param sprintIdsByKrId 每个 K 关联的冲刺 ID 列表（按 keyResultId 索引），可为空 map
+     * @param recordsByKrId   每个 K 的成果记录 R 列表（按 keyResultId 索引），可为空 map
      */
-    private ObjectiveVO toVO(Objective o, List<KeyResult> krs, Map<Long, List<Long>> sprintIdsByKrId) {
+    private ObjectiveVO toVO(Objective o, List<KeyResult> krs, Map<Long, List<Long>> sprintIdsByKrId,
+                             Map<Long, List<String>> recordsByKrId) {
         List<KeyResult> sorted = krs.stream()
                 .sorted(Comparator.comparing(KeyResult::getId))
                 .toList();
@@ -183,7 +197,9 @@ public class ObjectiveServiceImpl implements ObjectiveService {
         }
 
         List<KeyResultVO> krVOs = sorted.stream()
-                .map(kr -> toKrVO(kr, sprintIdsByKrId.getOrDefault(kr.getId(), Collections.emptyList())))
+                .map(kr -> toKrVO(kr,
+                        sprintIdsByKrId.getOrDefault(kr.getId(), Collections.emptyList()),
+                        recordsByKrId.getOrDefault(kr.getId(), Collections.emptyList())))
                 .toList();
 
         return ObjectiveVO.builder()
@@ -221,7 +237,7 @@ public class ObjectiveServiceImpl implements ObjectiveService {
         return KeyResultStatus.IN_PROGRESS.getValue();
     }
 
-    private KeyResultVO toKrVO(KeyResult kr, List<Long> sprintIds) {
+    private KeyResultVO toKrVO(KeyResult kr, List<Long> sprintIds, List<String> records) {
         return KeyResultVO.builder()
                 .id(kr.getId())
                 .name(kr.getName())
@@ -231,6 +247,7 @@ public class ObjectiveServiceImpl implements ObjectiveService {
                 .completeDate(kr.getCompleteDate())
                 .cancelReason(kr.getCancelReason())
                 .sprintIds(sprintIds == null ? Collections.emptyList() : sprintIds)
+                .records(records == null ? Collections.emptyList() : records)
                 .build();
     }
 

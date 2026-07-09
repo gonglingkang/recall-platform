@@ -41,6 +41,8 @@ class ObjectiveServiceTest extends BaseTest {
     private KeyResultService keyResultService;
     @Autowired
     private SprintService sprintService;
+    @Autowired
+    private KeyResultRecordService keyResultRecordService;
 
     @Test
     void create_shouldDefaultProgressZeroAndNotStarted() {
@@ -618,8 +620,204 @@ class ObjectiveServiceTest extends BaseTest {
         Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
         cancel(k1, "需求取消");
 
-        objectiveService.delete(objId); // 仅含已取消K → 允许删O
+        objectiveService.delete(objId); // 仅含已取消K -> 允许删O
         assertTrue(objectiveService.list("2026-07").isEmpty());
+    }
+
+    // ===================== 成果记录 R（v2.1）=====================
+
+    /** 切到完成并提交 R */
+    private KeyResultVO markDoneWithRecords(Long krId, List<String> records) {
+        KeyResultStatusReq done = new KeyResultStatusReq();
+        done.setStatus(KeyResultStatus.DONE);
+        done.setRecords(records);
+        return keyResultService.changeStatus(krId, done);
+    }
+
+    @Test
+    void changeStatus_toDone_withRecords_shouldSaveRecords() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+
+        KeyResultVO done = markDoneWithRecords(k1, List.of("成果A", "成果B", "成果C"));
+
+        assertEquals("2", done.getStatus());
+        assertEquals(3, done.getRecords().size(), "VO 应返回 3 条 R");
+        assertEquals(List.of("成果A", "成果B", "成果C"), done.getRecords());
+        // DB 实际落库
+        assertEquals(3, keyResultRecordService.listContentsByKeyResultId(k1).size(), "DB 应落 3 条 R");
+    }
+
+    @Test
+    void records_shouldPreserveSubmitOrder() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+
+        // 按特定顺序提交
+        markDoneWithRecords(k1, List.of("C3", "A1", "B2"));
+        // 查询返回顺序应与提交顺序一致（后端按自增 id 升序，即落库顺序）
+        assertEquals(List.of("C3", "A1", "B2"), keyResultRecordService.listContentsByKeyResultId(k1),
+                "R 顺序应与提交顺序一致");
+
+        // 返工后调整顺序再提交，顺序随之更新
+        markInProgress(k1);
+        markDoneWithRecords(k1, List.of("B2", "C3", "A1"));
+        assertEquals(List.of("B2", "C3", "A1"), keyResultRecordService.listContentsByKeyResultId(k1),
+                "调整顺序后提交，返回顺序应更新");
+    }
+
+    @Test
+    void changeStatus_toDone_emptyRecords_shouldClearExisting() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        // 先填 2 条 R
+        markDoneWithRecords(k1, List.of("成果A", "成果B"));
+        // 返工
+        markInProgress(k1);
+        // 再次切完成，传空列表 -> 清空旧 R
+        KeyResultVO done = markDoneWithRecords(k1, List.of());
+
+        assertTrue(done.getRecords().isEmpty(), "空列表应清空 R");
+        assertTrue(keyResultRecordService.listContentsByKeyResultId(k1).isEmpty(), "DB 应无 R");
+    }
+
+    @Test
+    void changeStatus_toDone_nullRecords_shouldClearExisting() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        // 先填 2 条 R
+        markDoneWithRecords(k1, List.of("成果A", "成果B"));
+        // 返工
+        markInProgress(k1);
+        // 再次切完成，不传 records(null) -> 清空旧 R
+        KeyResultStatusReq done = new KeyResultStatusReq();
+        done.setStatus(KeyResultStatus.DONE);
+        KeyResultVO vo = keyResultService.changeStatus(k1, done);
+
+        assertTrue(vo.getRecords().isEmpty(), "null 应清空 R");
+        assertTrue(keyResultRecordService.listContentsByKeyResultId(k1).isEmpty(), "DB 应无 R");
+    }
+
+    @Test
+    void changeStatus_toDone_replaceRecords_shouldOverwrite() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        // 先填 2 条 R
+        markDoneWithRecords(k1, List.of("旧成果A", "旧成果B"));
+        // 返工
+        markInProgress(k1);
+        // 再次切完成，传新内容 -> 全量覆盖
+        KeyResultVO done = markDoneWithRecords(k1, List.of("新成果X"));
+
+        assertEquals(1, done.getRecords().size(), "应覆盖为 1 条");
+        assertEquals("新成果X", done.getRecords().get(0));
+        assertEquals(List.of("新成果X"), keyResultRecordService.listContentsByKeyResultId(k1));
+    }
+
+    @Test
+    void changeStatus_doneToInProgress_shouldKeepRecords() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        markDoneWithRecords(k1, List.of("成果A", "成果B"));
+
+        // 切回进行中：R 保留不动
+        KeyResultVO inProgress = markInProgress(k1);
+
+        assertEquals("1", inProgress.getStatus());
+        assertEquals(2, inProgress.getRecords().size(), "切回进行中 R 应保留");
+        assertEquals(2, keyResultRecordService.listContentsByKeyResultId(k1).size(), "DB 中 R 不变");
+    }
+
+    @Test
+    void changeStatus_cancel_shouldKeepRecords() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        markDoneWithRecords(k1, List.of("成果A", "成果B"));
+
+        // 已完成 -> 进行中 -> 已取消（完成不能直接切取消，需经进行中）
+        markInProgress(k1);
+        KeyResultVO cancelled = cancel(k1, "需求取消");
+
+        assertEquals("3", cancelled.getStatus());
+        assertEquals(2, cancelled.getRecords().size(), "取消后 R 应保留");
+        assertEquals(2, keyResultRecordService.listContentsByKeyResultId(k1).size(), "DB 中 R 保留");
+    }
+
+    @Test
+    void deleteKeyResult_shouldCascadeDeleteRecords() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        markDoneWithRecords(k1, List.of("成果A", "成果B"));
+
+        keyResultService.delete(k1);
+
+        assertTrue(keyResultRecordService.listContentsByKeyResultId(k1).isEmpty(), "删 K 应级联删 R");
+    }
+
+    @Test
+    void deleteObjective_shouldCascadeDeleteRecords() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        Long k2 = keyResultService.create(krCreate(objId, "K2")).getId();
+        markDoneWithRecords(k1, List.of("成果A"));
+        markDoneWithRecords(k2, List.of("成果B", "成果C"));
+        // 含已完成 K 不允许删 O，先把两个 K 都删掉（连带删 R），再删 O
+        keyResultService.delete(k1);
+        keyResultService.delete(k2);
+
+        objectiveService.delete(objId);
+
+        assertTrue(keyResultRecordService.listContentsByKeyResultId(k1).isEmpty());
+        assertTrue(keyResultRecordService.listContentsByKeyResultId(k2).isEmpty());
+    }
+
+    @Test
+    void listObjectives_shouldCarryRecords() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        Long k2 = keyResultService.create(krCreate(objId, "K2")).getId();
+        markDoneWithRecords(k1, List.of("K1成果A", "K1成果B"));
+        // k2 不完成，无 R
+
+        List<ObjectiveVO> list = objectiveService.list("2026-07");
+        assertEquals(1, list.size());
+        KeyResultVO kr1Vo = list.get(0).getKeyResults().stream()
+                .filter(k -> k.getId().equals(k1)).findFirst().orElseThrow();
+        KeyResultVO kr2Vo = list.get(0).getKeyResults().stream()
+                .filter(k -> k.getId().equals(k2)).findFirst().orElseThrow();
+        assertEquals(List.of("K1成果A", "K1成果B"), kr1Vo.getRecords(), "K1 应携带 2 条 R");
+        assertTrue(kr2Vo.getRecords().isEmpty(), "K2 无 R 应为空列表");
+    }
+
+    @Test
+    void records_shouldIsolateByUser() {
+        Long userA = loginAsNewUser();
+        Long objA = objectiveService.create(objReq("2026-07", "A目标")).getId();
+        Long kA = keyResultService.create(krCreate(objA, "A的K")).getId();
+        markDoneWithRecords(kA, List.of("A的成果"));
+
+        // 切换用户 B
+        loginAsNewUser();
+        Long objB = objectiveService.create(objReq("2026-07", "B目标")).getId();
+        Long kB = keyResultService.create(krCreate(objB, "B的K")).getId();
+        markDoneWithRecords(kB, List.of("B的成果1", "B的成果2"));
+
+        // B 查自己的绩效列表，不应含 A 的 R
+        List<ObjectiveVO> listB = objectiveService.list("2026-07");
+        assertEquals(1, listB.size(), "B 只应看到自己的目标");
+        assertEquals("B目标", listB.get(0).getName());
+        KeyResultVO krB = listB.get(0).getKeyResults().get(0);
+        assertEquals(List.of("B的成果1", "B的成果2"), krB.getRecords());
     }
 
     @Test

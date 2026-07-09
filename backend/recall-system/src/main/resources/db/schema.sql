@@ -146,3 +146,20 @@ CREATE TABLE `key_results` (
     KEY `idx_user_objective_status` (`user_id`, `objective_id`, `status`),
     KEY `idx_objective` (`objective_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='关键成果表';
+
+-- ---------------------------------------------------------------------
+-- 关键成果成果记录 R 表（月度绩效 v2.1）
+-- K 切换到「已完成」时由用户提交的成果记录，1:N，仅 content 文本。
+-- 切回进行中/取消时保留 R；删 K 时级联物理删除 R。
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `key_result_records`;
+CREATE TABLE `key_result_records` (
+    `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`       BIGINT       NOT NULL COMMENT '所属用户(数据隔离)',
+    `key_result_id` BIGINT       NOT NULL COMMENT '归属关键成果K',
+    `content`       VARCHAR(2000) NOT NULL COMMENT '成果记录内容',
+    `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_key_result` (`key_result_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='关键成果成果记录R表';

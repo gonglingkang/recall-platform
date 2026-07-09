@@ -170,6 +170,13 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                       </svg>
                     </button>
+                    <!-- View R records -->
+                    <button class="kr-action-btn-item view-r-btn" v-if="item.status === 'done'" @click="openViewRModal(item)" title="查看成果记录 R">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
                     <!-- Edit KR -->
                     <button class="kr-action-btn-item" @click="openKRModal(item)" title="编辑关键成果">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -421,6 +428,109 @@
       </div>
     </div>
 
+    <!-- 2. R records fill-in Modal -->
+    <div v-if="rModal.isOpen" class="modal-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (rModal.isOpen = false)">
+      <div class="modal-content" @click.stop style="max-width: 480px; padding: 24px;">
+        <div class="modal-header-with-close" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: var(--text-main);">确认完成关键成果并提交成果记录 R</h3>
+          <button class="modal-close-icon-btn" @click="rModal.isOpen = false" title="关闭弹窗" style="background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 18px; height: 18px;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
+          <p style="font-size: 13.5px; color: var(--text-muted); line-height: 1.5; margin: 0;">
+            关键成果：<strong style="color: var(--text-main);">{{ rModal.krTitle }}</strong>
+          </p>
+          <p style="font-size: 12.5px; color: #475569; margin: 0; background-color: #f8fafc; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border-light); line-height: 1.5;">
+            💡 提示：成果记录 R 是指该关键成果实际产出的各项成果或指标。可输入多条（非强制，可选）。
+          </p>
+          
+          <div style="display: flex; flex-direction: column; gap: 10px; max-height: 240px; overflow-y: auto; padding-right: 4px; margin-top: 4px;">
+            <div 
+              v-for="(record, idx) in rModal.records" 
+              :key="idx"
+              style="display: flex; align-items: center; gap: 10px; width: 100%;"
+            >
+              <span style="font-size: 14px; font-weight: 700; color: var(--text-muted); min-width: 28px; text-align: right;">R{{ idx + 1 }}</span>
+              <input 
+                v-model="record.value" 
+                type="text" 
+                class="form-control" 
+                placeholder="请输入具体成果记录，最长2000字" 
+                maxlength="2000"
+                style="flex: 1;"
+              />
+              <button 
+                type="button" 
+                @click="removeRInput(idx)"
+                style="background: none; border: none; cursor: pointer; color: #ef4444; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s;"
+                title="删除该条"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 18px; height: 18px;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <button 
+            type="button" 
+            class="btn btn-secondary" 
+            @click="addRInput"
+            style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1.5px dashed var(--border-medium); background-color: #f8fafc; font-size: 13px; font-weight: 600; padding: 8px 12px; height: 38px;"
+          >
+            <span>+ 添加成果记录 R</span>
+          </button>
+        </div>
+        
+        <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button class="btn btn-secondary" @click="rModal.isOpen = false">取消</button>
+          <button class="btn btn-primary" @click="saveRRecords">保存并完成</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. View R records Modal -->
+    <div v-if="viewRModal.isOpen" class="modal-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (viewRModal.isOpen = false)">
+      <div class="modal-content" @click.stop style="max-width: 460px; padding: 24px;">
+        <div class="modal-header-with-close" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: var(--text-main);">成果记录 R 列表</h3>
+          <button class="modal-close-icon-btn" @click="viewRModal.isOpen = false" title="关闭弹窗" style="background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 18px; height: 18px;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
+          <p style="font-size: 13.5px; color: var(--text-muted); line-height: 1.5; margin: 0;">
+            关键成果：<strong style="color: var(--text-main);">{{ viewRModal.krTitle }}</strong>
+          </p>
+          
+          <div style="display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; padding-right: 4px; margin-top: 4px;">
+            <div 
+              v-for="(record, idx) in viewRModal.records" 
+              :key="idx"
+              style="display: flex; align-items: flex-start; gap: 10px; background-color: #f8fafc; padding: 10px 14px; border: 1.5px solid var(--border-light); border-radius: 6px;"
+            >
+              <span style="font-size: 13px; font-weight: 800; color: var(--text-muted); min-width: 24px; padding-top: 1px;">R{{ idx + 1 }}</span>
+              <span style="font-size: 13.5px; color: var(--text-main); line-height: 1.5; word-break: break-all; flex: 1;">{{ record }}</span>
+            </div>
+            <div v-if="viewRModal.records.length === 0" style="text-align: center; padding: 24px 0; color: var(--text-muted); font-size: 13px;">
+              暂无已填写的成果记录
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-actions" style="display: flex; justify-content: center;">
+          <button class="btn btn-primary" @click="viewRModal.isOpen = false" style="padding: 8px 32px; font-size: 13px;">关闭</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 3. Performance Category Management Drawer (PRD 6.8.1 / Issue 3) -->
     <transition name="drawer-slide">
       <div v-if="isPerfCatDrawerOpen" class="drawer-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (isPerfCatDrawerOpen = false)">
@@ -611,6 +721,19 @@ const cancelKRModal = reactive({
   krId: 0,
   krTitle: '',
   reason: ''
+})
+
+const rModal = reactive({
+  isOpen: false,
+  krId: 0,
+  krTitle: '',
+  records: [] as { value: string }[]
+})
+
+const viewRModal = reactive({
+  isOpen: false,
+  krTitle: '',
+  records: [] as string[]
 })
 
 // Custom Dropdown logic for KR Status
@@ -847,28 +970,57 @@ const saveKR = async () => {
   
   try {
     if (krModal.isEdit) {
-      await todoStore.updatePerformanceKR(authStore.currentUser.userId, krModal.id, {
-        categoryId: krModal.categoryId,
-        title: krModal.title.trim(),
-        remark: krModal.remark.trim(),
-        planCompleteDate: finalDate,
-        status: krModal.status
-      })
-      const event = new CustomEvent('app-toast', { detail: { text: '修改关键成果 (K) 成功！' } })
-      window.dispatchEvent(event)
+      const existingKR = performanceKRs.value.find(k => k.id === krModal.id)
+      const isStatusTransitioningToDone = krModal.status === 'done' && (!existingKR || existingKR.status !== 'done')
+
+      if (isStatusTransitioningToDone) {
+        await todoStore.updatePerformanceKR(authStore.currentUser.userId, krModal.id, {
+          categoryId: krModal.categoryId,
+          title: krModal.title.trim(),
+          remark: krModal.remark.trim(),
+          planCompleteDate: finalDate
+        })
+        krModal.isOpen = false
+        openRModal({
+          id: krModal.id,
+          title: krModal.title.trim(),
+          status: existingKR ? existingKR.status : 'in_progress',
+          records: existingKR ? existingKR.records : []
+        } as any)
+      } else {
+        const updatePayload: any = {
+          categoryId: krModal.categoryId,
+          title: krModal.title.trim(),
+          remark: krModal.remark.trim(),
+          planCompleteDate: finalDate
+        }
+        if (existingKR && existingKR.status !== krModal.status) {
+          updatePayload.status = krModal.status
+        }
+        await todoStore.updatePerformanceKR(authStore.currentUser.userId, krModal.id, updatePayload)
+        const event = new CustomEvent('app-toast', { detail: { text: '修改关键成果 (K) 成功！' } })
+        window.dispatchEvent(event)
+        krModal.isOpen = false
+      }
     } else {
-      await todoStore.addPerformanceKR(
+      const newKR = await todoStore.addPerformanceKR(
         authStore.currentUser.userId,
         krModal.categoryId,
         krModal.title.trim(),
         krModal.remark.trim(),
-        krModal.status,
         finalDate
       )
-      const event = new CustomEvent('app-toast', { detail: { text: '成功录入绩效关键成果 (K)！' } })
-      window.dispatchEvent(event)
+      krModal.isOpen = false
+      if (krModal.status === 'done') {
+        openRModal(newKR)
+      } else {
+        if (krModal.status === 'in_progress') {
+          await todoStore.updatePerformanceKR(authStore.currentUser.userId, newKR.id, { status: 'in_progress' })
+        }
+        const event = new CustomEvent('app-toast', { detail: { text: '成功录入绩效关键成果 (K)！' } })
+        window.dispatchEvent(event)
+      }
     }
-    krModal.isOpen = false
   } catch (err: any) {
     // Global toast handler will display the error
   }
@@ -924,8 +1076,8 @@ const toggleKRStatus = async (kr: PerformanceKR) => {
     newStatus = 'in_progress'
     toastText = '关键成果已点击开始，设为进行中！'
   } else if (kr.status === 'in_progress') {
-    newStatus = 'done'
-    toastText = '关键成果已标记完成！'
+    openRModal(kr)
+    return
   } else if (kr.status === 'done') {
     newStatus = 'in_progress'
     toastText = '已取消完成，关键成果恢复为进行中。'
@@ -941,6 +1093,55 @@ const toggleKRStatus = async (kr: PerformanceKR) => {
   } catch (err: any) {
     // Global toast handler will display the error
   }
+}
+
+const openRModal = (kr: PerformanceKR) => {
+  rModal.krId = kr.id
+  rModal.krTitle = kr.title
+  rModal.records = kr.records && kr.records.length > 0
+    ? kr.records.map(r => ({ value: r }))
+    : [{ value: '' }]
+  rModal.isOpen = true
+}
+
+const addRInput = () => {
+  if (rModal.records.length >= 50) {
+    showAlert('成果记录最多只能添加 50 条！')
+    return
+  }
+  rModal.records.push({ value: '' })
+}
+
+const removeRInput = (index: number) => {
+  rModal.records.splice(index, 1)
+  if (rModal.records.length === 0) {
+    rModal.records.push({ value: '' })
+  }
+}
+
+const saveRRecords = async () => {
+  if (!authStore.currentUser) return
+  const cleanRecords = rModal.records
+    .map(r => r.value.trim())
+    .filter(r => r !== '')
+
+  try {
+    await todoStore.updatePerformanceKR(authStore.currentUser.userId, rModal.krId, {
+      status: 'done',
+      records: cleanRecords
+    })
+    rModal.isOpen = false
+    const event = new CustomEvent('app-toast', { detail: { text: '关键成果已标记完成并保存成果记录！' } })
+    window.dispatchEvent(event)
+  } catch (err: any) {
+    // Error is handled globally
+  }
+}
+
+const openViewRModal = (kr: PerformanceKR) => {
+  viewRModal.krTitle = kr.title
+  viewRModal.records = kr.records || []
+  viewRModal.isOpen = true
 }
 
 const handleDeleteKR = (kr: PerformanceKR) => {
@@ -1745,6 +1946,11 @@ const handleExportData = () => {
   background-color: var(--danger-bg);
   color: var(--danger);
   border-color: rgba(239, 68, 68, 0.2);
+}
+.kr-action-btn-item.view-r-btn:hover {
+  background-color: #f0fdf4;
+  color: #16a34a;
+  border-color: rgba(22, 163, 74, 0.2);
 }
 .kr-action-btn-item svg {
   width: 15px;

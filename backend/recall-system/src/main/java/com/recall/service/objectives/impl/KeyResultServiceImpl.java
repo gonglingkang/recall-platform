@@ -12,6 +12,7 @@ import com.recall.dto.objectives.KeyResultUpdateReq;
 import com.recall.entity.objectives.KeyResult;
 import com.recall.entity.objectives.Objective;
 import com.recall.enums.KeyResultStatus;
+import com.recall.service.objectives.KeyResultRecordService;
 import com.recall.service.objectives.KeyResultService;
 import com.recall.service.objectives.ObjectiveService;
 import com.recall.service.sprint.SprintKeyResultService;
@@ -47,6 +48,7 @@ public class KeyResultServiceImpl implements KeyResultService {
     @Lazy
     private final SprintService sprintService;
     private final SprintKeyResultService sprintKeyResultService;
+    private final KeyResultRecordService keyResultRecordService;
 
     @Override
     public KeyResultVO create(KeyResultCreateReq req) {
@@ -82,7 +84,7 @@ public class KeyResultServiceImpl implements KeyResultService {
             kr.setCompleteDate(LocalDate.now());
         }
         keyResultMapper.insert(kr);
-        return toVO(kr, Collections.emptyList());
+        return toVO(kr, Collections.emptyList(), Collections.emptyList());
     }
 
     @Override
@@ -113,7 +115,8 @@ public class KeyResultServiceImpl implements KeyResultService {
         }
         // 编辑不改变 status 和 completeDate
         keyResultMapper.updateById(kr);
-        return toVO(kr, sprintKeyResultService.listSprintIdsByKeyResultId(id));
+        return toVO(kr, sprintKeyResultService.listSprintIdsByKeyResultId(id),
+                keyResultRecordService.listContentsByKeyResultId(id));
     }
 
     /**
@@ -136,24 +139,27 @@ public class KeyResultServiceImpl implements KeyResultService {
 
         kr.setStatus(target.getValue());
         if (target == KeyResultStatus.DONE) {
-            // →已完成：已有 completeDate 不覆盖，否则填当天；清空取消原因
+            // ->已完成：已有 completeDate 不覆盖，否则填当天；清空取消原因
             if (kr.getCompleteDate() == null) {
                 kr.setCompleteDate(LocalDate.now());
             }
             kr.setCancelReason(null);
+            // 全量覆盖成果记录 R：传了覆盖旧 R，不传(null)或空清空旧 R
+            keyResultRecordService.replaceByKeyResultId(id, req.getRecords());
         } else if (target == KeyResultStatus.CANCELLED) {
-            // →已取消：清空完成时间，写入取消原因
+            // ->已取消：清空完成时间，写入取消原因；R 保留不动
             kr.setCompleteDate(null);
             kr.setCancelReason(req.getCancelReason());
         } else {
-            // →未开始/进行中：清空完成时间与取消原因
+            // ->未开始/进行中：清空完成时间与取消原因；R 保留不动
             kr.setCompleteDate(null);
             kr.setCancelReason(null);
         }
         keyResultMapper.updateById(kr);
         // 联动同步关联该 K 的冲刺任务状态
         sprintService.syncStatusByKeyResult(id, target);
-        return toVO(kr, sprintKeyResultService.listSprintIdsByKeyResultId(id));
+        return toVO(kr, sprintKeyResultService.listSprintIdsByKeyResultId(id),
+                keyResultRecordService.listContentsByKeyResultId(id));
     }
 
     /**
@@ -199,9 +205,10 @@ public class KeyResultServiceImpl implements KeyResultService {
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         loadOwned(id);
-        // 先反查受影响的冲刺（关联记录还在时才能查到），再清关联、删 K、重算冲刺
+        // 先反查受影响的冲刺（关联记录还在时才能查到），再清关联、删 R、删 K、重算冲刺
         List<Long> affectedSprintIds = sprintKeyResultService.listSprintIdsByKeyResultId(id);
         sprintKeyResultService.deleteByKeyResultId(id);
+        keyResultRecordService.deleteByKeyResultId(id);
         keyResultMapper.deleteById(id);
         if (!affectedSprintIds.isEmpty()) {
             sprintService.recomputeStatus(affectedSprintIds);
@@ -248,8 +255,9 @@ public class KeyResultServiceImpl implements KeyResultService {
                 .flatMap(krId -> sprintKeyResultService.listSprintIdsByKeyResultId(krId).stream())
                 .distinct()
                 .toList();
-        // 批量清关联 + 删 K
+        // 批量清关联 + 删 R + 删 K
         sprintKeyResultService.deleteByKeyResultIds(krIds);
+        keyResultRecordService.deleteByKeyResultIds(krIds);
         int deleted = keyResultMapper.delete(new LambdaQueryWrapper<KeyResult>()
                 .eq(KeyResult::getObjectiveId, objectiveId));
         if (!affectedSprintIds.isEmpty()) {
@@ -307,7 +315,7 @@ public class KeyResultServiceImpl implements KeyResultService {
         return krs;
     }
 
-    private KeyResultVO toVO(KeyResult kr, List<Long> sprintIds) {
+    private KeyResultVO toVO(KeyResult kr, List<Long> sprintIds, List<String> records) {
         return KeyResultVO.builder()
                 .id(kr.getId())
                 .name(kr.getName())
@@ -317,6 +325,7 @@ public class KeyResultServiceImpl implements KeyResultService {
                 .completeDate(kr.getCompleteDate())
                 .cancelReason(kr.getCancelReason())
                 .sprintIds(sprintIds == null ? Collections.emptyList() : sprintIds)
+                .records(records == null ? Collections.emptyList() : records)
                 .build();
     }
 }

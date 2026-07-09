@@ -40,4 +40,7 @@ public class KeyResultVO {
 
     @Schema(description = "关联的冲刺任务ID列表")
     private List<Long> sprintIds;
+
+    @Schema(description = "成果记录R列表(K切换到已完成时提交)")
+    private List<String> records;
 }

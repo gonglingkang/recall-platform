@@ -57,6 +57,7 @@ export interface PerformanceKR {
   sourceSprintId: number | null
   derivedTodoIds: number[]
   sprintIds: number[]
+  records?: string[]
 }
 
 export interface TeamSprint {
@@ -492,7 +493,7 @@ export const useTodoStore = defineStore('todo', {
       return mapPerfItemVOToKR(res.data, categoryId, this.currentMonth)
     },
 
-    async updatePerformanceKR(userId: number, id: number, updates: Partial<PerformanceKR> & { cancelReason?: string }) {
+    async updatePerformanceKR(userId: number, id: number, updates: Partial<PerformanceKR> & { cancelReason?: string; records?: string[] }) {
       const payload: any = {}
       if (updates.title !== undefined) payload.name = updates.title
       if (updates.remark !== undefined) payload.description = updates.remark
@@ -519,6 +520,12 @@ export const useTodoStore = defineStore('todo', {
         }
         if (updates.cancelReason !== undefined) {
           patchPayload.cancelReason = updates.cancelReason
+        }
+        if (updates.records !== undefined) {
+          patchPayload.records = updates.records
+        } else if (updates.status === 'done') {
+          const existingKR = this.performanceKRs.find(k => k.id === id)
+          patchPayload.records = existingKR && existingKR.records ? existingKR.records : []
         }
 
         await request.patch(`/api/key-results/${id}/status`, patchPayload)
@@ -741,7 +748,8 @@ function mapPerfItemVOToKR(vo: any, categoryId = 0, month = ''): PerformanceKR {
     remark: vo.description || vo.note || '',
     sourceSprintId: null,
     derivedTodoIds: vo.derivedTodoIds ? vo.derivedTodoIds.map(Number) : [],
-    sprintIds: vo.sprintIds ? vo.sprintIds.map(Number) : []
+    sprintIds: vo.sprintIds ? vo.sprintIds.map(Number) : [],
+    records: vo.records || []
   }
 }
 
