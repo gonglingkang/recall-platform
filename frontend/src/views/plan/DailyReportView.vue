@@ -64,7 +64,7 @@
 
     <!-- Weekly Groups List -->
     <div v-else class="weekly-groups-container">
-      <div v-for="group in weeklyGroups" :key="group.weekNum" class="week-card-box">
+      <div v-for="group in weeklyGroups" :key="group.weekNum" class="week-card-box" :class="{ 'has-today': hasToday(group) }">
         <!-- Week Heading -->
         <div class="week-header-row">
           <div class="week-num-badge">第 {{ toChineseNumeral(group.weekNum) }} 周</div>
@@ -77,13 +77,14 @@
             v-for="day in group.days" 
             :key="day.dateStr" 
             class="day-report-item" 
-            :class="[day.type, { 'has-content': day.savedItems.length > 0 }]"
+            :class="[day.type, { 'has-content': day.savedItems.length > 0, 'is-today': day.dateStr === todayDateStr }]"
           >
             <!-- Left Info Panel -->
             <div class="day-meta-info">
-              <div class="day-date-label">
-                <span class="day-number">{{ day.dayLabel }}</span>
-                <span class="day-weekday">{{ day.weekDayLabel }}</span>
+              <div class="day-date-label" style="display: flex; align-items: center; gap: 6px;">
+                <span class="day-number" :style="{ color: day.dateStr === todayDateStr ? '#ef4444' : '' }">{{ day.dayLabel }}</span>
+                <span class="day-weekday" :style="{ color: day.dateStr === todayDateStr ? '#ef4444' : '' }">{{ day.weekDayLabel }}</span>
+                <span v-if="day.dateStr === todayDateStr" style="font-size: 10px; font-weight: 800; color: #ef4444; background-color: #fee2e2; padding: 1px 5px; border-radius: 4px; display: inline-block;">今天</span>
               </div>
               
               <!-- Badges -->
@@ -108,11 +109,26 @@
                   <span style="color: var(--text-muted); font-size: 12.5px; margin-left: 6px; font-weight: 600; background-color: #f1f5f9; padding: 2px 6px; border-radius: 4px;">完成进度：{{ item.progress }}%</span>
                   
                   <template v-if="item.associatedTodoId">
-                    <span style="color: var(--text-muted); font-size: 12px; margin: 0 4px; font-weight: 500;">关联</span>
-                    <span :class="getTodoStatus(day.todos, item.associatedTodoId) === 'done' ? 'todo-status-tag done' : 'todo-status-tag pending'" style="font-weight: 600; font-size: 11px;">
-                      ({{ getTodoStatusLabel(day.todos, item.associatedTodoId) }})
+                    <span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; margin-left: 6px; vertical-align: middle;">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 12px; height: 12px; color: #64748b; flex-shrink: 0;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                      </svg>
+                      <span style="color: #64748b; font-weight: 600; font-size: 11px;">关联待办</span>
+                      <span 
+                        class="todo-status-tag"
+                        :class="(item.associatedTodoStatus || getTodoStatus(day.todos, item.associatedTodoId)) === 'done' ? 'done' : 'pending'"
+                        style="font-weight: 700; font-size: 10px; padding: 1px 4px; border-radius: 3px;"
+                      >
+                        {{ (item.associatedTodoStatus || getTodoStatus(day.todos, item.associatedTodoId)) === 'done' ? '已完成' : '进行中' }}
+                      </span>
+                      <span 
+                        style="color: #475569; font-weight: 500;"
+                        :style="{ textDecoration: (item.associatedTodoStatus || getTodoStatus(day.todos, item.associatedTodoId)) === 'done' ? 'line-through' : 'none', opacity: (item.associatedTodoStatus || getTodoStatus(day.todos, item.associatedTodoId)) === 'done' ? 0.7 : 1 }"
+                      >
+                        {{ item.associatedTodoTitle || getTodoTitle(day.todos, item.associatedTodoId) }}
+                        <span v-if="item.associatedTodoDateLabel" style="font-size: 10px; color: #94a3b8; font-weight: 600; text-decoration: none; display: inline-block; margin-left: 4px;">({{ item.associatedTodoDateLabel }})</span>
+                      </span>
                     </span>
-                    <span style="color: var(--text-main);">{{ getTodoTitle(day.todos, item.associatedTodoId) }}</span>
                   </template>
                 </div>
               </div>
@@ -394,7 +410,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useTodoStore } from '@/stores/todo'
@@ -408,6 +424,33 @@ const todoStore = useTodoStore()
 
 const currentMonthStr = ref(new Date().toISOString().substring(0, 7))
 const selectedMonth = ref(route.params.month as string || currentMonthStr.value)
+
+const getTodayDateStr = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const r = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${r}`
+}
+const todayDateStr = ref(getTodayDateStr())
+
+const hasToday = (group: WeekGroup) => {
+  return group.days.some(d => d.dateStr === todayDateStr.value)
+}
+
+const scrollToTodayWeek = () => {
+  nextTick(() => {
+    const todayElement = document.querySelector('.day-report-item.is-today')
+    if (todayElement) {
+      todayElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    } else {
+      const todayWeekCard = document.querySelector('.week-card-box.has-today')
+      if (todayWeekCard) {
+        todayWeekCard.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
+  })
+}
 
 // Filter settings
 const filterSettings = reactive({
@@ -445,6 +488,9 @@ interface DailyReportItem {
   content: string
   progress: number
   associatedTodoId: number | null
+  associatedTodoTitle?: string
+  associatedTodoStatus?: string
+  associatedTodoDateLabel?: string
 }
 
 interface DayItem {
@@ -594,6 +640,7 @@ const fetchMonthlyReports = async (monthStr: string) => {
         map[rep.reportDate] = rep
       })
       reportsMap.value = map
+      scrollToTodayWeek()
     } else {
       reportsMap.value = {}
     }
@@ -687,11 +734,30 @@ const weeklyGroups = computed(() => {
     const reportData = reportsMap.value[dateStr]
     if (reportData && reportData.items) {
       reportData.items.forEach((item: any) => {
+        const relatedTodo = item.todos && item.todos.length > 0 ? item.todos[0] : null
+        let todoStatus: string | undefined = undefined
+        if (relatedTodo) {
+          todoStatus = (relatedTodo.status === '1' || relatedTodo.status === 'done') ? 'done' : 'pending'
+        }
+        const todoDateStr = relatedTodo && relatedTodo.createdAt ? relatedTodo.createdAt.split('T')[0] : undefined
+        let associatedTodoDateLabel: string | undefined = undefined
+        if (todoDateStr && todoDateStr !== dateStr) {
+          const parts = todoDateStr.split('-')
+          if (parts.length === 3) {
+            associatedTodoDateLabel = `${parseInt(parts[1])}月${parseInt(parts[2])}日`
+          } else {
+            associatedTodoDateLabel = todoDateStr
+          }
+        }
+
         savedItems.push({
           id: item.id?.toString() || (Date.now() + Math.random()).toString(),
           content: item.content,
           progress: item.progress,
-          associatedTodoId: item.todos && item.todos.length > 0 ? item.todos[0].id : null
+          associatedTodoId: relatedTodo ? relatedTodo.id : null,
+          associatedTodoTitle: relatedTodo ? relatedTodo.title : undefined,
+          associatedTodoStatus: todoStatus,
+          associatedTodoDateLabel
         })
       })
     }
@@ -852,12 +918,13 @@ const copyStructuredDayReport = async (day: DayItem) => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('click', closeAllDropdowns)
   if (authStore.currentUser) {
     todoStore.refreshTodayTodos(authStore.currentUser.userId)
-    todoStore.refreshCategories(authStore.currentUser.userId)
+    await todoStore.refreshCategories(authStore.currentUser.userId)
   }
+  scrollToTodayWeek()
 })
 
 onBeforeUnmount(() => {
@@ -985,6 +1052,12 @@ onBeforeUnmount(() => {
   padding: 18px 20px;
   gap: 24px;
   align-items: center;
+}
+
+.day-report-item.is-today {
+  border-left: 4px solid #ef4444;
+  background-color: #fef2f2;
+  padding-left: 16px;
 }
 
 .day-report-item:last-child {

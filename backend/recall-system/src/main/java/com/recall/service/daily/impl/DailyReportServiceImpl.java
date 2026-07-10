@@ -268,6 +268,7 @@ public class DailyReportServiceImpl implements DailyReportService {
                 .title(todo.getTitle())
                 .status(todo.getStatus())
                 .doneAt(todo.getDoneAt())
+                .createdAt(todo.getCreatedAt())
                 .build();
     }
 
