@@ -32,6 +32,14 @@ public interface ObjectiveService {
     List<ObjectiveVO> list(String month);
 
     /**
+     * 查询当前用户存在目标 O 的月份清单（去重、倒序，最近月份在前）。
+     * <p>用于前端月份搜索下拉框的取值来源。
+     *
+     * @return 月份列表，格式 yyyy-MM，按月份倒序
+     */
+    List<String> listMonths();
+
+    /**
      * 新增目标 O（名称在同用户同月内唯一，冲突抛 409）。
      *
      * @param req 创建请求

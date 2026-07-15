@@ -56,6 +56,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/requirements/categories',
+    name: 'requirement-categories',
+    component: () => import('@/views/category/RequirementCategoriesView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/plan/:month?',
     name: 'plan-overview',
     component: () => import('@/views/plan/PlanOverviewView.vue'),
@@ -79,6 +85,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/plan/DailyReportView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/requirements',
+    name: 'requirements',
+    component: () => import('@/views/plan/RequirementsView.vue'),
+    meta: { requiresAuth: true },
+  },
+
 
   {
     path: '/settings',

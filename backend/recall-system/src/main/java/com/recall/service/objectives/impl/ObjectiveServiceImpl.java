@@ -93,6 +93,17 @@ public class ObjectiveServiceImpl implements ObjectiveService {
     }
 
     @Override
+    public List<String> listMonths() {
+        // 仅取当前用户存在目标 O 的月份，去重 + 倒序；走 idx_user_month 索引
+        List<Objective> objectives = objectiveMapper.selectList(new LambdaQueryWrapper<Objective>()
+                .select(Objective::getMonth)
+                .eq(Objective::getUserId, UserContextHolder.requireUserId())
+                .groupBy(Objective::getMonth)
+                .orderByDesc(Objective::getMonth));
+        return objectives.stream().map(Objective::getMonth).toList();
+    }
+
+    @Override
     public ObjectiveVO create(ObjectiveCreateReq req) {
         Long userId = UserContextHolder.requireUserId();
         // 同用户同月名称唯一

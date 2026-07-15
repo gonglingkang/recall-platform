@@ -216,3 +216,74 @@ CREATE TABLE `daily_report_item_todos` (
     UNIQUE KEY `uk_item_todo` (`item_id`, `todo_id`),
     KEY `idx_todo` (`todo_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='日报项-待办关联表';
+
+-- ---------------------------------------------------------------------
+-- 需求表 requirements
+-- 需求是需求文档/会议文档的归属载体，可 1:1 独占绑定一个关键成果 K。
+-- 绑 K 时，讨论中/进行中/开发完成三态由 K 状态映射驱动；未绑 K 时手动维护。
+-- 进入不涉及/验收完成/发布完成时自动解绑 K，之后 K 不再驱动。
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `requirements`;
+CREATE TABLE `requirements` (
+    `id`                 BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`            BIGINT        NOT NULL COMMENT '所属用户(数据隔离)',
+    `title`              VARCHAR(200)  NOT NULL COMMENT '需求标题',
+    `description`        VARCHAR(2000) DEFAULT NULL COMMENT '需求描述',
+    `status`             VARCHAR(8)   NOT NULL DEFAULT '0' COMMENT '状态 0讨论中/1不涉及/2进行中/3开发完成/4验收完成/5发布完成',
+    `key_result_id`      BIGINT        DEFAULT NULL COMMENT '绑定的关键成果K(1:1独占,可空)',
+    `category_id`        BIGINT        DEFAULT NULL COMMENT '需求主分类ID(必选,业务层强制非空)',
+    `sub_category_id`    BIGINT        DEFAULT NULL COMMENT '需求子分类ID(可选)',
+    `first_demand_date`  DATE          NOT NULL COMMENT '首次需求时间',
+    `dev_complete_date`  DATE          DEFAULT NULL COMMENT '开发完成日期(后端管理)',
+    `acceptance_date`    DATE          DEFAULT NULL COMMENT '验收完成日期',
+    `acceptance_person`  VARCHAR(100)  DEFAULT NULL COMMENT '验收人(姓名)',
+    `release_date`       DATE          DEFAULT NULL COMMENT '发布完成日期',
+    `cancel_reason`      VARCHAR(500)  DEFAULT NULL COMMENT '不涉及原因(状态为不涉及时填)',
+    `created_at`         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    -- 一个 K 可被多个需求绑定（1:N），普通索引便于按 K 反查需求
+    KEY `idx_key_result` (`key_result_id`),
+    KEY `idx_user_status` (`user_id`, `status`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='需求表';
+
+-- ---------------------------------------------------------------------
+-- 需求文档表 requirement_documents（仅外部链接，不存文件本体）
+-- 一条需求可挂多个文档，type 区分原型设计/需求文档/会议纪要。
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `requirement_documents`;
+CREATE TABLE `requirement_documents` (
+    `id`              BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`         BIGINT        NOT NULL COMMENT '所属用户(数据隔离)',
+    `requirement_id`  BIGINT        NOT NULL COMMENT '归属需求ID',
+    `type`            VARCHAR(8)    NOT NULL COMMENT '文档类型 1原型设计/2需求文档/3会议纪要',
+    `title`           VARCHAR(200)  NOT NULL COMMENT '文档标题',
+    `url`             VARCHAR(2000) NOT NULL COMMENT '外部链接',
+    `document_date`   DATE          NOT NULL COMMENT '文档时间',
+    `created_at`      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_requirement` (`requirement_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='需求文档表(仅外部链接)';
+
+-- ---------------------------------------------------------------------
+-- 需求分类表 requirement_categories（两级分类，单表 + parentId 表达层级）
+-- 与待办分类(categories)完全独立。parentId 为 null=主分类，非空=子分类。
+-- 删除规则：有子分类拒绝；有需求占用拒绝。不预置默认分类。
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `requirement_categories`;
+CREATE TABLE `requirement_categories` (
+    `id`         BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`    BIGINT      NOT NULL COMMENT '所属用户(数据隔离)',
+    `parent_id`  BIGINT      DEFAULT NULL COMMENT '父分类ID;NULL=主分类,非空=子分类',
+    `name`       VARCHAR(20) NOT NULL COMMENT '名称(同父下唯一)',
+    `color`      VARCHAR(20) DEFAULT NULL COMMENT '颜色;仅主分类可用',
+    `sort_order` INT         DEFAULT 0 COMMENT '排序',
+    `created_at` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    -- 同父下同名唯一；用 generated column 把 parent_id 的 NULL 归一为 0
+    `parent_key` BIGINT      AS (COALESCE(`parent_id`, 0)) STORED,
+    UNIQUE KEY `uk_user_parent_name` (`user_id`, `parent_key`, `name`),
+    KEY `idx_user_parent` (`user_id`, `parent_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='需求分类表(两级,单表+parentId)';

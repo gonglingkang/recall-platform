@@ -106,7 +106,15 @@
                 >
                   <span style="font-weight: 700; color: var(--text-muted);">{{ idx + 1 }}、</span>
                   <span style="color: var(--text-main);">{{ item.content }}</span>
-                  <span style="color: var(--text-muted); font-size: 12.5px; margin-left: 6px; font-weight: 600; background-color: #f1f5f9; padding: 2px 6px; border-radius: 4px;">完成进度：{{ item.progress }}%</span>
+                  <span 
+                    style="font-size: 12.5px; margin-left: 6px; font-weight: 600; padding: 2px 6px; border-radius: 4px; transition: all 0.2s;"
+                    :style="{
+                      backgroundColor: item.progress === 100 ? '#dcfce7' : '#dbeafe',
+                      color: item.progress === 100 ? '#15803d' : '#1d4ed8'
+                    }"
+                  >
+                    完成进度：{{ item.progress }}%
+                  </span>
                   
                   <template v-if="item.associatedTodoId">
                     <span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; margin-left: 6px; vertical-align: middle;">

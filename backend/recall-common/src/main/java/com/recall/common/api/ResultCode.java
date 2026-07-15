@@ -35,6 +35,16 @@ public enum ResultCode {
     DAILY_REPORT_FUTURE_DATE(4601, "不能填写未来日期的日报"),
     DAILY_TODO_NOT_RELATED(4602, "待办在该日期不可关联"),
 
+    // --- 需求错误 47xx ---
+    REQUIREMENT_TITLE_DUPLICATED(4701, "需求标题已存在"),
+    REQUIREMENT_KR_ALREADY_BOUND(4702, "关键成果已被其他需求绑定"),
+    REQUIREMENT_KR_CANCELLED(4703, "不能绑定已取消的关键成果"),
+    REQUIREMENT_KR_BIND_STATE_NOT_ALLOWED(4704, "当前状态不可绑定关键成果"),
+    REQUIREMENT_CATEGORY_NAME_DUPLICATED(4710, "需求分类名已存在"),
+    REQUIREMENT_CATEGORY_HAS_SUB(4711, "请先删除该分类下的子分类"),
+    REQUIREMENT_CATEGORY_HAS_REQUIREMENT(4712, "该分类下有需求，无法删除"),
+    REQUIREMENT_SUB_CATEGORY_PARENT_MISMATCH(4713, "子分类的父分类与传入主分类不一致"),
+
     // --- 服务器错误 5xx ---
     INTERNAL_ERROR(500, "服务器内部错误"),
     SERVICE_UNAVAILABLE(503, "服务暂不可用");

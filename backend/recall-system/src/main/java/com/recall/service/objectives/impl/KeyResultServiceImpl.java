@@ -15,6 +15,7 @@ import com.recall.enums.KeyResultStatus;
 import com.recall.service.objectives.KeyResultRecordService;
 import com.recall.service.objectives.KeyResultService;
 import com.recall.service.objectives.ObjectiveService;
+import com.recall.service.requirement.RequirementService;
 import com.recall.service.sprint.SprintKeyResultService;
 import com.recall.service.sprint.SprintService;
 import com.recall.vo.objectives.KeyResultVO;
@@ -47,6 +48,8 @@ public class KeyResultServiceImpl implements KeyResultService {
     private final ObjectiveService objectiveService;
     @Lazy
     private final SprintService sprintService;
+    @Lazy
+    private final RequirementService requirementService;
     private final SprintKeyResultService sprintKeyResultService;
     private final KeyResultRecordService keyResultRecordService;
 
@@ -158,6 +161,8 @@ public class KeyResultServiceImpl implements KeyResultService {
         keyResultMapper.updateById(kr);
         // 联动同步关联该 K 的冲刺任务状态
         sprintService.syncStatusByKeyResult(id, target);
+        // 联动同步绑该 K 的需求状态（K 状态映射需求讨论中/进行中/开发完成）
+        requirementService.syncStatusByKeyResult(id, target);
         return toVO(kr, sprintKeyResultService.listSprintIdsByKeyResultId(id),
                 keyResultRecordService.listContentsByKeyResultId(id));
     }
@@ -213,6 +218,8 @@ public class KeyResultServiceImpl implements KeyResultService {
         if (!affectedSprintIds.isEmpty()) {
             sprintService.recomputeStatus(affectedSprintIds);
         }
+        // 联动解绑该 K 的需求并回讨论中
+        requirementService.handleKeyResultDeleted(id);
     }
 
     @Override
@@ -263,6 +270,8 @@ public class KeyResultServiceImpl implements KeyResultService {
         if (!affectedSprintIds.isEmpty()) {
             sprintService.recomputeStatus(affectedSprintIds);
         }
+        // 联动解绑这些 K 的需求并回讨论中
+        requirementService.handleKeyResultsDeleted(krIds);
         return deleted;
     }
 

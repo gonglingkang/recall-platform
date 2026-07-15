@@ -66,6 +66,37 @@ class ObjectiveServiceTest extends BaseTest {
     }
 
     @Test
+    void listMonths_shouldReturnDistinctMonthsDesc() {
+        loginAsNewUser();
+        objectiveService.create(objReq("2026-07", "目标A"));
+        objectiveService.create(objReq("2026-07", "目标B")); // 同月多条，去重
+        objectiveService.create(objReq("2026-06", "上月目标"));
+        objectiveService.create(objReq("2026-08", "下月目标"));
+
+        List<String> months = objectiveService.listMonths();
+        assertEquals(List.of("2026-08", "2026-07", "2026-06"), months, "月份去重且倒序");
+    }
+
+    @Test
+    void listMonths_emptyWhenNoObjective() {
+        loginAsNewUser();
+        assertTrue(objectiveService.listMonths().isEmpty(), "无目标时返回空列表");
+    }
+
+    @Test
+    void listMonths_shouldIsolateByUser() {
+        loginAsNewUser();
+        objectiveService.create(objReq("2026-07", "A目标"));
+
+        loginAsNewUser(); // 切到用户 B
+        objectiveService.create(objReq("2026-06", "B目标"));
+
+        // B 只应看到自己的月份
+        List<String> monthsB = objectiveService.listMonths();
+        assertEquals(List.of("2026-06"), monthsB, "B 不应看到 A 的月份");
+    }
+
+    @Test
     void derivedProgress_shouldBeDoneCountOverTotal() {
         loginAsNewUser();
         Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();

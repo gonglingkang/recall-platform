@@ -50,6 +50,12 @@ public class ObjectiveController {
         return Result.ok(objectiveService.list(month));
     }
 
+    @Operation(summary = "存在目标的月份清单", description = "当前用户存在目标O的月份去重列表（倒序），用于月份搜索")
+    @GetMapping("/months")
+    public Result<List<String>> listMonths() {
+        return Result.ok(objectiveService.listMonths());
+    }
+
     @Operation(summary = "新增目标", description = "名称在同用户同月内唯一；仅 name/description/month")
     @PostMapping
     public Result<ObjectiveVO> create(@Valid @RequestBody ObjectiveCreateReq req) {
