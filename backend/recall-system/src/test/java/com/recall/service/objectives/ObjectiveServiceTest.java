@@ -4,6 +4,7 @@ import com.recall.BaseTest;
 import com.recall.common.api.ResultCode;
 import com.recall.common.exception.BusinessException;
 import com.recall.dto.objectives.KeyResultCreateReq;
+import com.recall.dto.objectives.KeyResultRecordsUpdateReq;
 import com.recall.dto.objectives.KeyResultStatusReq;
 import com.recall.dto.objectives.KeyResultUpdateReq;
 import com.recall.dto.objectives.ObjectiveCreateReq;
@@ -849,6 +850,109 @@ class ObjectiveServiceTest extends BaseTest {
         assertEquals("B目标", listB.get(0).getName());
         KeyResultVO krB = listB.get(0).getKeyResults().get(0);
         assertEquals(List.of("B的成果1", "B的成果2"), krB.getRecords());
+    }
+
+    // ===================== 全量更新 R（不改K状态） =====================
+
+    @Test
+    void updateRecords_shouldOverwriteAll() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        markDoneWithRecords(k1, List.of("成果A", "成果B", "成果C"));
+
+        // 全量覆盖为新的 2 条
+        KeyResultRecordsUpdateReq req = new KeyResultRecordsUpdateReq();
+        req.setRecords(List.of("成果A-修正", "新成果D"));
+        KeyResultVO vo = keyResultService.updateRecords(k1, req);
+
+        assertEquals(List.of("成果A-修正", "新成果D"), vo.getRecords(), "VO 返回覆盖后的R列表");
+        assertEquals(List.of("成果A-修正", "新成果D"),
+                keyResultRecordService.listContentsByKeyResultId(k1), "DB 已全量覆盖");
+    }
+
+    @Test
+    void updateRecords_emptyList_clearsAll() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        markDoneWithRecords(k1, List.of("成果A", "成果B"));
+
+        // 传空数组 -> 清空所有 R
+        KeyResultRecordsUpdateReq req = new KeyResultRecordsUpdateReq();
+        req.setRecords(List.of());
+        KeyResultVO vo = keyResultService.updateRecords(k1, req);
+
+        assertTrue(vo.getRecords().isEmpty(), "空数组清空R");
+        assertTrue(keyResultRecordService.listContentsByKeyResultId(k1).isEmpty(), "DB 无R");
+    }
+
+    @Test
+    void updateRecords_krStatusUnchanged() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        markDoneWithRecords(k1, List.of("成果A"));
+
+        KeyResultRecordsUpdateReq req = new KeyResultRecordsUpdateReq();
+        req.setRecords(List.of("成果A-修正"));
+        KeyResultVO vo = keyResultService.updateRecords(k1, req);
+
+        assertEquals("2", vo.getStatus(), "更新R不影响K状态(仍已完成)");
+        assertNotNull(vo.getCompleteDate(), "completeDate 保留");
+    }
+
+    @Test
+    void updateRecords_notDone_shouldThrow() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        // K 未完成（默认未开始），更新 R -> 409
+        KeyResultRecordsUpdateReq req = new KeyResultRecordsUpdateReq();
+        req.setRecords(List.of("成果"));
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> keyResultService.updateRecords(k1, req));
+        assertEquals(ResultCode.CONFLICT.getCode(), ex.getCode(), "非已完成的K禁止更新R");
+    }
+
+    @Test
+    void updateRecords_inProgress_shouldThrow() {
+        loginAsNewUser();
+        Long objId = objectiveService.create(objReq("2026-07", "目标")).getId();
+        Long k1 = keyResultService.create(krCreate(objId, "K1")).getId();
+        markInProgress(k1);
+        // K 进行中，更新 R -> 409
+        KeyResultRecordsUpdateReq req = new KeyResultRecordsUpdateReq();
+        req.setRecords(List.of("成果"));
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> keyResultService.updateRecords(k1, req));
+        assertEquals(ResultCode.CONFLICT.getCode(), ex.getCode(), "进行中的K禁止更新R");
+    }
+
+    @Test
+    void updateRecords_otherUserKr_should404() {
+        Long userA = loginAsNewUser();
+        Long objA = objectiveService.create(objReq("2026-07", "A目标")).getId();
+        Long kA = keyResultService.create(krCreate(objA, "A的K")).getId();
+        markDoneWithRecords(kA, List.of("A的成果"));
+
+        // 切换用户 B，更新 A 的 K 的 R -> 404
+        loginAsNewUser();
+        KeyResultRecordsUpdateReq req = new KeyResultRecordsUpdateReq();
+        req.setRecords(List.of("篡改"));
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> keyResultService.updateRecords(kA, req));
+        assertEquals(ResultCode.NOT_FOUND.getCode(), ex.getCode());
+    }
+
+    @Test
+    void updateRecords_notExistKr_should404() {
+        loginAsNewUser();
+        KeyResultRecordsUpdateReq req = new KeyResultRecordsUpdateReq();
+        req.setRecords(List.of("内容"));
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> keyResultService.updateRecords(999999L, req));
+        assertEquals(ResultCode.NOT_FOUND.getCode(), ex.getCode());
     }
 
     @Test

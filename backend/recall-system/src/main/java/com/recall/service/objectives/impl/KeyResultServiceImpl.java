@@ -7,6 +7,7 @@ import com.recall.common.exception.BusinessException;
 import com.recall.common.util.DateUtils;
 import com.recall.dao.objectives.KeyResultMapper;
 import com.recall.dto.objectives.KeyResultCreateReq;
+import com.recall.dto.objectives.KeyResultRecordsUpdateReq;
 import com.recall.dto.objectives.KeyResultStatusReq;
 import com.recall.dto.objectives.KeyResultUpdateReq;
 import com.recall.entity.objectives.KeyResult;
@@ -163,6 +164,25 @@ public class KeyResultServiceImpl implements KeyResultService {
         sprintService.syncStatusByKeyResult(id, target);
         // 联动同步绑该 K 的需求状态（K 状态映射需求讨论中/进行中/开发完成）
         requirementService.syncStatusByKeyResult(id, target);
+        return toVO(kr, sprintKeyResultService.listSprintIdsByKeyResultId(id),
+                keyResultRecordService.listContentsByKeyResultId(id));
+    }
+
+    /**
+     * 全量更新关键成果的成果记录 R。
+     * <p>仅已完成的 K 允许更新 R（R 只在已完成时产生）。委托 KeyResultRecordService.replaceByKeyResultId
+     * （先删后插，多条写）-> 加事务保证原子性。不改 K 状态。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public KeyResultVO updateRecords(Long id, KeyResultRecordsUpdateReq req) {
+        KeyResult kr = loadOwned(id);
+        // 仅已完成的 K 才有 R，非已完成禁止更新
+        if (!KeyResultStatus.DONE.getValue().equals(kr.getStatus())) {
+            throw new BusinessException(ResultCode.CONFLICT, "仅已完成的关键成果可更新成果记录");
+        }
+        // 全量覆盖 R（传了覆盖，空清空）
+        keyResultRecordService.replaceByKeyResultId(id, req.getRecords());
         return toVO(kr, sprintKeyResultService.listSprintIdsByKeyResultId(id),
                 keyResultRecordService.listContentsByKeyResultId(id));
     }

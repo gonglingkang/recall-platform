@@ -2,6 +2,7 @@ package com.recall.controller.objectives;
 
 import com.recall.common.api.Result;
 import com.recall.dto.objectives.KeyResultCreateReq;
+import com.recall.dto.objectives.KeyResultRecordsUpdateReq;
 import com.recall.dto.objectives.KeyResultStatusReq;
 import com.recall.dto.objectives.KeyResultUpdateReq;
 import com.recall.service.objectives.KeyResultService;
@@ -54,6 +55,13 @@ public class KeyResultController {
     public Result<KeyResultVO> changeStatus(@Parameter(description = "关键成果ID") @PathVariable Long id,
                                             @Valid @RequestBody KeyResultStatusReq req) {
         return Result.ok(keyResultService.changeStatus(id, req));
+    }
+
+    @Operation(summary = "全量更新成果记录R", description = "对指定K的所有R进行全量覆盖，不改K状态")
+    @PutMapping("/{id}/records")
+    public Result<KeyResultVO> updateRecords(@Parameter(description = "关键成果ID") @PathVariable Long id,
+                                             @Valid @RequestBody KeyResultRecordsUpdateReq req) {
+        return Result.ok(keyResultService.updateRecords(id, req));
     }
 
     @Operation(summary = "删除关键成果", description = "删除后归属目标的派生进度自动重算")

@@ -1,6 +1,7 @@
 package com.recall.service.objectives;
 
 import com.recall.dto.objectives.KeyResultCreateReq;
+import com.recall.dto.objectives.KeyResultRecordsUpdateReq;
 import com.recall.dto.objectives.KeyResultStatusReq;
 import com.recall.dto.objectives.KeyResultUpdateReq;
 import com.recall.entity.objectives.KeyResult;
@@ -47,6 +48,16 @@ public interface KeyResultService {
      * @return 更新后的关键成果
      */
     KeyResultVO changeStatus(Long id, KeyResultStatusReq req);
+
+    /**
+     * 全量更新关键成果的成果记录 R（不改 K 状态，仅覆盖 R）。
+     * <p>传了覆盖旧 R，传空清空旧 R。
+     *
+     * @param id  关键成果 ID
+     * @param req 全量更新请求
+     * @return 更新后的关键成果（含最新 R 列表）
+     */
+    KeyResultVO updateRecords(Long id, KeyResultRecordsUpdateReq req);
 
     /**
      * 删除关键成果 K。

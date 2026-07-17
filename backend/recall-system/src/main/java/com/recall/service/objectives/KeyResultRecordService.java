@@ -7,7 +7,7 @@ import java.util.Map;
  * 关键成果成果记录 R Service，管理 key_result_records 表的数据访问。
  * <p>
  * 其他 Service（如 KeyResultService）操作 R 数据须经本接口，不直接注入 KeyResultRecordMapper。
- * R 仅在 K 切换到「已完成」时随状态变更提交，无独立增删改接口。
+ * R 在 K 切换到「已完成」时随状态变更全量提交，也可通过 K 的全量更新接口单独覆盖。
  *
  * @author recall
  */

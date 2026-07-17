@@ -229,7 +229,7 @@
         <form @submit.prevent="saveCategory">
           <div class="form-field">
             <label for="cat-name-field">目标名称</label>
-            <input id="cat-name-field" v-model="catModal.name" type="text" required class="form-control" placeholder="例如：O1：完成Q2核心功能模块开发" />
+            <input id="cat-name-field" v-model="catModal.name" type="text" required class="form-control" placeholder="例如：O1：完成Q2核心功能模块开发" autocomplete="off" />
           </div>
           <div class="form-field">
             <label for="cat-desc-field">目标描述</label>
@@ -493,11 +493,13 @@
       </div>
     </div>
 
-    <!-- 3. View R records Modal -->
+    <!-- 3. View / Edit R records Modal -->
     <div v-if="viewRModal.isOpen" class="modal-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (viewRModal.isOpen = false)">
       <div class="modal-content" @click.stop style="max-width: 460px; padding: 24px;">
         <div class="modal-header-with-close" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-          <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: var(--text-main);">成果记录 R 列表</h3>
+          <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: var(--text-main);">
+            {{ viewRModal.isEditing ? '编辑成果记录 R' : '成果记录 R 列表' }}
+          </h3>
           <button class="modal-close-icon-btn" @click="viewRModal.isOpen = false" title="关闭弹窗" style="background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%;">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 18px; height: 18px;">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -510,23 +512,71 @@
             关键成果：<strong style="color: var(--text-main);">{{ viewRModal.krTitle }}</strong>
           </p>
           
-          <div style="display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; padding-right: 4px; margin-top: 4px;">
-            <div 
-              v-for="(record, idx) in viewRModal.records" 
-              :key="idx"
-              style="display: flex; align-items: flex-start; gap: 10px; background-color: #f8fafc; padding: 10px 14px; border: 1.5px solid var(--border-light); border-radius: 6px;"
+          <template v-if="!viewRModal.isEditing">
+            <div style="display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; padding-right: 4px; margin-top: 4px;">
+              <div 
+                v-for="(record, idx) in viewRModal.records" 
+                :key="idx"
+                style="display: flex; align-items: flex-start; gap: 10px; background-color: #f8fafc; padding: 10px 14px; border: 1.5px solid var(--border-light); border-radius: 6px;"
+              >
+                <span style="font-size: 13px; font-weight: 800; color: var(--text-muted); min-width: 24px; padding-top: 1px;">R{{ idx + 1 }}</span>
+                <span style="font-size: 13.5px; color: var(--text-main); line-height: 1.5; word-break: break-all; flex: 1;">{{ record }}</span>
+              </div>
+              <div v-if="viewRModal.records.length === 0" style="text-align: center; padding: 24px 0; color: var(--text-muted); font-size: 13px;">
+                暂无已填写的成果记录
+              </div>
+            </div>
+          </template>
+
+          <template v-else>
+            <div style="display: flex; flex-direction: column; gap: 10px; max-height: 240px; overflow-y: auto; padding-right: 4px; margin-top: 4px;">
+              <div 
+                v-for="(record, idx) in viewRModal.tempRecords" 
+                :key="idx"
+                style="display: flex; align-items: center; gap: 10px; width: 100%;"
+              >
+                <span style="font-size: 14px; font-weight: 700; color: var(--text-muted); min-width: 28px; text-align: right;">R{{ idx + 1 }}</span>
+                <input 
+                  v-model="record.value" 
+                  type="text" 
+                  class="form-control" 
+                  placeholder="请输入具体成果记录，最长2000字" 
+                  maxlength="2000"
+                  style="flex: 1;"
+                />
+                <button 
+                  type="button" 
+                  @click="removeTempRRecord(idx)"
+                  style="background: none; border: none; cursor: pointer; color: #ef4444; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s;"
+                  title="删除该条"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 18px; height: 18px;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <button 
+              type="button" 
+              class="btn btn-secondary" 
+              @click="addTempRRecord"
+              style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1.5px dashed var(--border-medium); background-color: #f8fafc; font-size: 13px; font-weight: 600; padding: 8px 12px; height: 38px;"
             >
-              <span style="font-size: 13px; font-weight: 800; color: var(--text-muted); min-width: 24px; padding-top: 1px;">R{{ idx + 1 }}</span>
-              <span style="font-size: 13.5px; color: var(--text-main); line-height: 1.5; word-break: break-all; flex: 1;">{{ record }}</span>
-            </div>
-            <div v-if="viewRModal.records.length === 0" style="text-align: center; padding: 24px 0; color: var(--text-muted); font-size: 13px;">
-              暂无已填写的成果记录
-            </div>
-          </div>
+              <span>+ 添加成果记录 R</span>
+            </button>
+          </template>
         </div>
         
-        <div class="modal-actions" style="display: flex; justify-content: center;">
-          <button class="btn btn-primary" @click="viewRModal.isOpen = false" style="padding: 8px 32px; font-size: 13px;">关闭</button>
+        <div class="modal-actions" style="display: flex; justify-content: center; gap: 12px;">
+          <template v-if="!viewRModal.isEditing">
+            <button class="btn btn-secondary" @click="viewRModal.isEditing = true" style="padding: 8px 24px; font-size: 13px;">编辑</button>
+            <button class="btn btn-primary" @click="viewRModal.isOpen = false" style="padding: 8px 24px; font-size: 13px;">关闭</button>
+          </template>
+          <template v-else>
+            <button class="btn btn-secondary" @click="viewRModal.isEditing = false" style="padding: 8px 24px; font-size: 13px;">取消</button>
+            <button class="btn btn-primary" @click="saveViewRRecords" style="padding: 8px 24px; font-size: 13px;">保存</button>
+          </template>
         </div>
       </div>
     </div>
@@ -652,6 +702,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useTodoStore } from '@/stores/todo'
 import type { PerformanceKR, PerformanceCategory } from '@/stores/todo'
+import request from '@/api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -781,8 +832,11 @@ const rModal = reactive({
 
 const viewRModal = reactive({
   isOpen: false,
+  krId: 0,
   krTitle: '',
-  records: [] as string[]
+  records: [] as string[],
+  isEditing: false,
+  tempRecords: [] as { value: string }[]
 })
 
 const isChecklistModalOpen = ref(false)
@@ -1192,9 +1246,55 @@ const saveRRecords = async () => {
 }
 
 const openViewRModal = (kr: PerformanceKR) => {
+  viewRModal.krId = kr.id
   viewRModal.krTitle = kr.title
   viewRModal.records = kr.records || []
+  viewRModal.isEditing = false
+  viewRModal.tempRecords = (kr.records || []).map(r => ({ value: r }))
   viewRModal.isOpen = true
+}
+
+const addTempRRecord = () => {
+  if (viewRModal.tempRecords.length >= 50) {
+    showAlert('成果记录最多只能添加 50 条！')
+    return
+  }
+  viewRModal.tempRecords.push({ value: '' })
+}
+
+const removeTempRRecord = (idx: number) => {
+  viewRModal.tempRecords.splice(idx, 1)
+}
+
+const saveViewRRecords = async () => {
+  const recordsList = viewRModal.tempRecords
+    .map(r => r.value.trim())
+    .filter(val => val.length > 0)
+
+  for (const r of recordsList) {
+    if (r.length > 2000) {
+      showAlert('成果记录单条最长为 2000 个字符')
+      return
+    }
+  }
+
+  try {
+    await request.put(`/api/key-results/${viewRModal.krId}/records`, {
+      records: recordsList
+    })
+    
+    viewRModal.records = recordsList
+    viewRModal.isEditing = false
+    
+    if (authStore.currentUser) {
+      await todoStore.refreshObjectives(authStore.currentUser.userId)
+    }
+    
+    const event = new CustomEvent('app-toast', { detail: { text: '成果记录已成功更新！' } })
+    window.dispatchEvent(event)
+  } catch (err) {
+    console.error('Failed to update KR records:', err)
+  }
 }
 
 const handleDeleteKR = (kr: PerformanceKR) => {
