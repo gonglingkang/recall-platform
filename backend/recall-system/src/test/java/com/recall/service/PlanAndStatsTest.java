@@ -78,8 +78,41 @@ class PlanAndStatsTest extends BaseTest {
     }
 
     @Test
-    void trend_invalidRange_shouldThrow() {
+    void trend_shouldIgnoreNotInvolvedSprints() {
         loginAsNewUser();
+        // 需我介入 1 条并完成；另有 2 条无需我介入（状态永远停在未开始，不应进分母）
+        markSprintDone(createSprint("2026-06", "介入冲刺"));
+        createSprintNotInvolved("2026-06", "旁观冲刺1");
+        createSprintNotInvolved("2026-06", "旁观冲刺2");
+
+        List<MonthTrendVO> trend = planService.trend("2026-06", "2026-06");
+        assertEquals(1.0, trend.get(0).getSprintRate(), "无需我介入的冲刺不进分母，应为 1.0 而非 0.33");
+    }
+
+    @Test
+    void trend_onlyNotInvolvedSprints_shouldBeZero() {
+        loginAsNewUser();
+        createSprintNotInvolved("2026-06", "旁观冲刺");
+
+        List<MonthTrendVO> trend = planService.trend("2026-06", "2026-06");
+        assertEquals(0.0, trend.get(0).getSprintRate(), "无有效冲刺时为 0");
+    }
+
+    @Test
+    void trend_shouldExcludeCancelledKeyResults() {
+        loginAsNewUser();
+        // 3 个 K：完成 1、取消 1、未开始 1 → 有效 K 为 2，绩效率 0.5
+        Long objId = objectiveService.create(objReq("2026-06", "目标1")).getId();
+        markKrDone(keyResultService.create(krReq(objId, "KR1")).getId());
+        markKrCancelled(keyResultService.create(krReq(objId, "KR2")).getId());
+        keyResultService.create(krReq(objId, "KR3"));
+
+        List<MonthTrendVO> trend = planService.trend("2026-06", "2026-06");
+        assertEquals(0.5, trend.get(0).getPerfRate(), "已取消的 K 不进分母");
+    }
+
+    @Test
+    void trend_invalidRange_shouldThrow() {        loginAsNewUser();
         // 起始晚于截止
         assertThrows(BusinessException.class, () -> planService.trend("2026-06", "2026-01"));
         // 非法格式
@@ -96,6 +129,14 @@ class PlanAndStatsTest extends BaseTest {
         keyResultService.changeStatus(krId, done);
     }
 
+    private void markKrCancelled(Long krId) {
+        KeyResultStatusReq cancelled = new KeyResultStatusReq();
+        cancelled.setStatus(KeyResultStatus.CANCELLED);
+        cancelled.setCancelReason("需求取消");
+        keyResultService.changeStatus(krId, cancelled);
+    }
+
+    /** 创建冲刺并标记为需我介入（创建接口本身固定 needInvolved=false） */
     private Long createSprint(String month, String title) {
         SprintCreateReq sp = new SprintCreateReq();
         sp.setMonth(month);
@@ -105,6 +146,14 @@ class PlanAndStatsTest extends BaseTest {
         involved.setNeedInvolved(true);
         sprintService.toggleInvolved(spId, involved);
         return spId;
+    }
+
+    /** 创建冲刺并保持「无需我介入」：此类冲刺无法改状态也无法关联 K，状态永远是未开始 */
+    private Long createSprintNotInvolved(String month, String title) {
+        SprintCreateReq sp = new SprintCreateReq();
+        sp.setMonth(month);
+        sp.setTitle(title);
+        return sprintService.create(sp).getId();
     }
 
     private void markSprintDone(Long spId) {

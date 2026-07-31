@@ -2,15 +2,11 @@ package com.recall.service.plan.impl;
 
 import com.recall.common.api.ResultCode;
 import com.recall.common.exception.BusinessException;
-import com.recall.enums.KeyResultStatus;
-import com.recall.enums.SprintStatus;
 import com.recall.service.objectives.ObjectiveService;
 import com.recall.service.plan.PlanService;
 import com.recall.service.sprint.SprintService;
-import com.recall.vo.objectives.KeyResultVO;
-import com.recall.vo.objectives.ObjectiveVO;
+import com.recall.vo.plan.MonthCompletionCountVO;
 import com.recall.vo.plan.MonthTrendVO;
-import com.recall.vo.sprint.SprintItemVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -18,12 +14,22 @@ import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 月度趋势 Service 实现。
  * <p>
  * 通过 {@link ObjectiveService} / {@link SprintService} 聚合每月完成率，不直接注入 Mapper。
- * 绩效率 = 有效 K（排除已取消）中已完成占比；冲刺率 = 冲刺中已完成占比；无数据时为 0。
+ * 两者各按月份区间批量取数，再在内存中按月装配；查询次数与月份跨度无关，避免按月循环查库。
+ * <p>
+ * 口径：
+ * <ul>
+ *   <li>绩效率 = 有效 K（排除已取消）中已完成占比</li>
+ *   <li>冲刺率 = 需我介入的冲刺中已完成占比（无需我介入的冲刺不可能完成，不进分母）</li>
+ *   <li>无数据的月份为 0</li>
+ * </ul>
  *
  * @author recall
  */
@@ -47,47 +53,33 @@ public class PlanServiceImpl implements PlanService {
             throw new BusinessException(ResultCode.PARAM_VALIDATE_FAILED,
                     "月范围跨度不能超过 " + MAX_MONTH_SPAN + " 个月");
         }
+        Map<String, MonthCompletionCountVO> perfCounts =
+                indexByMonth(objectiveService.countKeyResultsByMonthRange(startMonth, endMonth));
+        Map<String, MonthCompletionCountVO> sprintCounts =
+                indexByMonth(sprintService.countInvolvedByMonthRange(startMonth, endMonth));
         List<MonthTrendVO> result = new ArrayList<>();
         for (YearMonth ym = start; !ym.isAfter(end); ym = ym.plusMonths(1)) {
             String month = ym.toString();
             result.add(MonthTrendVO.builder()
                     .month(month)
-                    .perfRate(round(perfRate(month)))
-                    .sprintRate(round(sprintRate(month)))
+                    .perfRate(rate(perfCounts.get(month)))
+                    .sprintRate(rate(sprintCounts.get(month)))
                     .build());
         }
         return result;
     }
 
-    /** 绩效完成率：有效 K（排除已取消）中已完成占比，无有效 K 时 0 */
-    private double perfRate(String month) {
-        List<ObjectiveVO> objectives = objectiveService.list(month);
-        int total = 0;
-        int done = 0;
-        for (ObjectiveVO o : objectives) {
-            for (KeyResultVO kr : o.getKeyResults()) {
-                if (KeyResultStatus.CANCELLED.getValue().equals(kr.getStatus())) {
-                    continue;
-                }
-                total++;
-                if (KeyResultStatus.DONE.getValue().equals(kr.getStatus())) {
-                    done++;
-                }
-            }
-        }
-        return total == 0 ? 0 : (double) done / total;
+    private Map<String, MonthCompletionCountVO> indexByMonth(List<MonthCompletionCountVO> counts) {
+        return counts.stream()
+                .collect(Collectors.toMap(MonthCompletionCountVO::getMonth, Function.identity()));
     }
 
-    /** 冲刺完成率：已完成冲刺占比，无冲刺时 0 */
-    private double sprintRate(String month) {
-        List<SprintItemVO> sprints = sprintService.list(month, null);
-        if (sprints.isEmpty()) {
+    /** 完成率 0-1，保留两位小数；该月无数据（查询未返回行）时为 0 */
+    private double rate(MonthCompletionCountVO count) {
+        if (count == null || count.getTotal() == 0) {
             return 0;
         }
-        long done = sprints.stream()
-                .filter(s -> SprintStatus.DONE.getValue().equals(s.getStatus()))
-                .count();
-        return (double) done / sprints.size();
+        return Math.round((double) count.getDone() / count.getTotal() * 100) / 100.0;
     }
 
     private YearMonth parseMonth(String month) {
@@ -95,9 +87,5 @@ public class PlanServiceImpl implements PlanService {
             throw new BusinessException(ResultCode.PARAM_VALIDATE_FAILED, "月份格式应为 YYYY-MM");
         }
         return YearMonth.parse(month);
-    }
-
-    private double round(double v) {
-        return Math.round(v * 100) / 100.0;
     }
 }

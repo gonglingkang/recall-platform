@@ -6,6 +6,7 @@ import com.recall.dto.sprint.SprintLinkReq;
 import com.recall.dto.sprint.SprintStatusReq;
 import com.recall.dto.sprint.SprintUpdateReq;
 import com.recall.enums.KeyResultStatus;
+import com.recall.vo.plan.MonthCompletionCountVO;
 import com.recall.vo.sprint.SprintItemVO;
 
 import java.util.List;
@@ -28,6 +29,17 @@ public interface SprintService {
      * @return 冲刺列表
      */
     List<SprintItemVO> list(String month, Boolean needInvolved);
+
+    /**
+     * 按月份区间统计「需我介入」冲刺的完成计数（供月度趋势聚合，查询次数与月份跨度无关）。
+     * <p>无需我介入的冲刺不可能变为已完成（既禁止手动改状态，也禁止关联 K），故不计入 total；
+     * 区间内无数据的月份不会返回对应行，由调用方按缺省处理。
+     *
+     * @param startMonth 起始月份 YYYY-MM（含）
+     * @param endMonth   截止月份 YYYY-MM（含）
+     * @return 按月分组的完成计数，仅含有数据的月份
+     */
+    List<MonthCompletionCountVO> countInvolvedByMonthRange(String startMonth, String endMonth);
 
     /**
      * 新建冲刺项（只需 month + title + note）。

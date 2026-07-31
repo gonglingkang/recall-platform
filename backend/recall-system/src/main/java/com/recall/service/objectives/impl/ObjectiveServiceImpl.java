@@ -17,6 +17,7 @@ import com.recall.service.objectives.ObjectiveService;
 import com.recall.service.sprint.SprintKeyResultService;
 import com.recall.vo.objectives.KeyResultVO;
 import com.recall.vo.objectives.ObjectiveVO;
+import com.recall.vo.plan.MonthCompletionCountVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -89,6 +90,36 @@ public class ObjectiveServiceImpl implements ObjectiveService {
         return objectives.stream()
                 .map(o -> toVO(o, krMap.getOrDefault(o.getId(), Collections.emptyList()),
                         sprintIdsByKrId, recordsByKrId))
+                .toList();
+    }
+
+    @Override
+    public List<MonthCompletionCountVO> countKeyResultsByMonthRange(String startMonth, String endMonth) {
+        // K 自身不存月份，需先取区间内的 O 建立 objectiveId → month 映射，再批量取 K（共 2 次查询，与月份跨度无关）
+        List<Objective> objectives = objectiveMapper.selectList(new LambdaQueryWrapper<Objective>()
+                .select(Objective::getId, Objective::getMonth)
+                .eq(Objective::getUserId, UserContextHolder.requireUserId())
+                .between(Objective::getMonth, startMonth, endMonth));
+        if (objectives.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<Long, String> monthByObjectiveId = objectives.stream()
+                .collect(Collectors.toMap(Objective::getId, Objective::getMonth));
+        List<KeyResult> krs = keyResultService.listByObjectives(objectives.stream().map(Objective::getId).toList());
+        return krs.stream()
+                // 已取消的 K 不进分母，与 toVO 的派生口径一致
+                .filter(kr -> !KeyResultStatus.CANCELLED.getValue().equals(kr.getStatus()))
+                .collect(Collectors.groupingBy(kr -> monthByObjectiveId.get(kr.getObjectiveId())))
+                .entrySet().stream()
+                .map(e -> {
+                    MonthCompletionCountVO count = new MonthCompletionCountVO();
+                    count.setMonth(e.getKey());
+                    count.setTotal(e.getValue().size());
+                    count.setDone(e.getValue().stream()
+                            .filter(kr -> KeyResultStatus.DONE.getValue().equals(kr.getStatus()))
+                            .count());
+                    return count;
+                })
                 .toList();
     }
 

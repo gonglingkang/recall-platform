@@ -4,6 +4,7 @@ import com.recall.dto.objectives.ObjectiveCreateReq;
 import com.recall.dto.objectives.ObjectiveUpdateReq;
 import com.recall.entity.objectives.Objective;
 import com.recall.vo.objectives.ObjectiveVO;
+import com.recall.vo.plan.MonthCompletionCountVO;
 
 import java.util.List;
 
@@ -30,6 +31,17 @@ public interface ObjectiveService {
      * @return 目标列表
      */
     List<ObjectiveVO> list(String month);
+
+    /**
+     * 按月份区间统计关键成果 K 的完成计数（供月度趋势聚合，查询次数与月份跨度无关）。
+     * <p>已取消的 K 不计入 total，与 {@link #list(String)} 的派生口径一致；
+     * 区间内无数据的月份不会返回对应行，由调用方按缺省处理。
+     *
+     * @param startMonth 起始月份 YYYY-MM（含）
+     * @param endMonth   截止月份 YYYY-MM（含）
+     * @return 按月分组的完成计数，仅含有数据的月份
+     */
+    List<MonthCompletionCountVO> countKeyResultsByMonthRange(String startMonth, String endMonth);
 
     /**
      * 查询当前用户存在目标 O 的月份清单（去重、倒序，最近月份在前）。

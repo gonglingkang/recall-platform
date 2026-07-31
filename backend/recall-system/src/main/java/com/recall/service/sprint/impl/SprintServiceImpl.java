@@ -18,6 +18,7 @@ import com.recall.enums.SprintStatus;
 import com.recall.service.objectives.KeyResultService;
 import com.recall.service.sprint.SprintKeyResultService;
 import com.recall.service.sprint.SprintService;
+import com.recall.vo.plan.MonthCompletionCountVO;
 import com.recall.vo.sprint.SprintItemVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -71,6 +72,29 @@ public class SprintServiceImpl implements SprintService {
                         SprintKeyResult::getSprintId,
                         Collectors.mapping(SprintKeyResult::getKeyResultId, Collectors.toList())));
         return items.stream().map(i -> toVO(i, krMap.getOrDefault(i.getId(), Collections.emptyList()))).toList();
+    }
+
+    @Override
+    public List<MonthCompletionCountVO> countInvolvedByMonthRange(String startMonth, String endMonth) {
+        // 只取需我介入项：无需我介入的冲刺既不可手动改状态也不可关联 K，状态恒为未开始，计入分母只会无条件拉低完成率
+        List<SprintItem> items = sprintItemMapper.selectList(new LambdaQueryWrapper<SprintItem>()
+                .select(SprintItem::getMonth, SprintItem::getStatus)
+                .eq(SprintItem::getUserId, UserContextHolder.requireUserId())
+                .eq(SprintItem::getNeedInvolved, true)
+                .between(SprintItem::getMonth, startMonth, endMonth));
+        return items.stream()
+                .collect(Collectors.groupingBy(SprintItem::getMonth))
+                .entrySet().stream()
+                .map(e -> {
+                    MonthCompletionCountVO count = new MonthCompletionCountVO();
+                    count.setMonth(e.getKey());
+                    count.setTotal(e.getValue().size());
+                    count.setDone(e.getValue().stream()
+                            .filter(i -> SprintStatus.DONE.getValue().equals(i.getStatus()))
+                            .count());
+                    return count;
+                })
+                .toList();
     }
 
     @Override
