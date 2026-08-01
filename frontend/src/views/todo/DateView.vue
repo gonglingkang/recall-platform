@@ -51,14 +51,14 @@
     <!-- Calendar Grid Container -->
     <div class="calendar-container premium-card" style="padding: 0; overflow: hidden; border: 1px solid var(--border-light); border-radius: var(--radius-lg); background: #fff; box-shadow: var(--shadow-sm); margin-bottom: 30px;">
       <!-- Weekday Headers -->
-      <div class="weekday-header-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); background: #f8fafc; border-bottom: 1px solid var(--border-light); text-align: center;">
-        <div v-for="dayName in ['周日', '周一', '周二', '周三', '周四', '周五', '周六']" :key="dayName" style="padding: 14px 0; font-size: 14px; font-weight: 700; color: var(--text-muted);">
+      <div class="weekday-header-grid" style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: #f8fafc; border-bottom: 1px solid var(--border-light); text-align: center;">
+        <div v-for="dayName in ['周日', '周一', '周二', '周三', '周四', '周五', '周六']" :key="dayName" style="padding: 14px 0; font-size: 14px; font-weight: 700; color: var(--text-muted); min-width: 0;">
           {{ dayName }}
         </div>
       </div>
 
       <!-- Days Grid -->
-      <div class="days-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); background: var(--border-light); gap: 1px;">
+      <div class="days-grid" style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--border-light); gap: 1px;">
         <div 
           v-for="cell in calendarDays" 
           :key="cell.dateStr"
@@ -66,7 +66,7 @@
           :class="{ 'other-month': !cell.isCurrentMonth, 'is-today': cell.isToday, 'has-todos': (monthlyTodosMap[cell.dateStr] || []).length > 0 }"
           @click="(monthlyTodosMap[cell.dateStr] || []).length > 0 ? openDayListModal(cell.dateStr) : null"
           :style="{ cursor: (monthlyTodosMap[cell.dateStr] || []).length > 0 ? 'pointer' : 'default' }"
-          style="min-height: 120px; background: #fff; padding: 10px; display: flex; flex-direction: column; gap: 6px; transition: background-color 0.15s ease;"
+          style="min-height: 120px; background: #fff; padding: 10px; display: flex; flex-direction: column; gap: 6px; transition: background-color 0.15s ease; min-width: 0; overflow: hidden;"
         >
           <!-- Day Number -->
           <div class="cell-day-num" style="font-size: 13.5px; font-weight: 700; color: var(--text-main);" :style="{ opacity: cell.isCurrentMonth ? 1 : 0.45 }">
@@ -74,7 +74,7 @@
           </div>
 
           <!-- Todo Items List -->
-          <div class="cell-todos-list" style="display: flex; flex-direction: column; gap: 4px; flex: 1; overflow: hidden;">
+          <div class="cell-todos-list" style="display: flex; flex-direction: column; gap: 4px; flex: 1; overflow: hidden; min-width: 0; width: 100%;">
             <template v-if="(monthlyTodosMap[cell.dateStr] || []).length <= 3">
               <div 
                 v-for="todo in (monthlyTodosMap[cell.dateStr] || [])"
@@ -82,7 +82,7 @@
                 class="todo-capsule"
                 :class="{ 'todo-capsule-done': todo.status === 'done' }"
                 :style="getTodoCapsuleStyle(todo)"
-                style="padding: 4px 8px; border-radius: 4px; font-size: 11.5px; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; transition: all 0.15s ease;"
+                style="padding: 4px 8px; border-radius: 4px; font-size: 11.5px; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; transition: all 0.15s ease; min-width: 0; max-width: 100%; box-sizing: border-box; display: block;"
                 :title="todo.title"
               >
                 {{ todo.title }}
@@ -95,13 +95,13 @@
                 class="todo-capsule"
                 :class="{ 'todo-capsule-done': todo.status === 'done' }"
                 :style="getTodoCapsuleStyle(todo)"
-                style="padding: 4px 8px; border-radius: 4px; font-size: 11.5px; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; transition: all 0.15s ease;"
+                style="padding: 4px 8px; border-radius: 4px; font-size: 11.5px; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; transition: all 0.15s ease; min-width: 0; max-width: 100%; box-sizing: border-box; display: block;"
                 :title="todo.title"
               >
                 {{ todo.title }}
               </div>
               <div 
-                style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #64748b; background: #f1f5f9; border: 1.5px dashed var(--border-medium); text-align: center; user-select: none;"
+                style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #64748b; background: #f1f5f9; border: 1.5px dashed var(--border-medium); text-align: center; user-select: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;"
               >
                 + {{ (monthlyTodosMap[cell.dateStr] || []).length - 2 }} 更多
               </div>
@@ -815,6 +815,33 @@ const handleOverlayClick = (e: MouseEvent, closeFn: () => void) => {
 }
 
 /* Calendar Grid */
+.weekday-header-grid,
+.days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  width: 100%;
+}
+
+.calendar-cell {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.cell-todos-list {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.todo-capsule {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: block !important;
+}
+
 .calendar-cell.has-todos:hover {
   background-color: #fafbfc !important;
 }

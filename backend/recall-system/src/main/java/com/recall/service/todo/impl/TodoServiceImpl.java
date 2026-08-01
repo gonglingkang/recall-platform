@@ -19,6 +19,7 @@ import com.recall.enums.TodoStatus;
 import com.recall.service.category.CategoryService;
 import com.recall.service.daily.DailyReportItemTodoService;
 import com.recall.service.todo.TodoService;
+import com.recall.vo.category.CategoryVO;
 import com.recall.vo.todo.TodoMonthVO;
 import com.recall.vo.todo.TodoVO;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,8 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -106,6 +109,10 @@ public class TodoServiceImpl implements TodoService {
                         .or().ge(Todo::getDoneAt, start.atStartOfDay()));
         List<Todo> todos = todoMapper.selectList(wrapper);
 
+        // 分类展示顺序（大分类 → 其下子分类的扁平序号），供每天列表内排序使用
+        Map<Long, Integer> categoryOrder = buildCategoryOrder();
+        Comparator<TodoVO> dayOrder = dayDisplayOrder(categoryOrder);
+
         // 按天分组：对当月每一天 D，纳入生命周期区间覆盖 D 的待办。
         // 区间 = [createdAt日, doneAt 为空 ? 今天 : doneAt日]：
         //   - 已完成待办 doneAt 一定 ≤ 今天，区间为 [createdAt日, doneAt日]
@@ -136,6 +143,8 @@ public class TodoServiceImpl implements TodoService {
                     dayTodos.add(toVOForDay(todo, d));
                 }
             }
+            // 排序须在快照之后：同一条待办在完成日之前是 pending、完成当天是 done，排序键取当天快照状态
+            dayTodos.sort(dayOrder);
             days.add(TodoMonthVO.DayGroup.builder()
                     .date(d)
                     .todos(dayTodos)
@@ -492,5 +501,61 @@ public class TodoServiceImpl implements TodoService {
                     .build();
         }
         return toVO(todo);
+    }
+
+    /**
+     * 构建分类的展示顺序表：categoryId → 扁平序号。
+     * <p>
+     * 按「大分类 → 该大分类下的子分类」深度优先遍历分类树依次编号，因此大分类自身的序号必然小于其子分类，
+     * 与前端分组渲染「先渲染挂在大分类下的待办，再渲染各子分类」的顺序一致。
+     * <p>
+     * 取树的遍历下标而非 sortOrder 原值：sortOrder 可空且可重复，下标唯一且已包含
+     * {@code sortOrder asc, id asc} 的排序结果，能保证与前端分组顺序严格一致。
+     *
+     * @return categoryId → 序号；未出现在树中的分类（如已删除）不在表内
+     */
+    private Map<Long, Integer> buildCategoryOrder() {
+        Map<Long, Integer> order = new HashMap<>();
+        int seq = 0;
+        for (CategoryVO root : categoryService.listTree()) {
+            order.put(root.getId(), seq++);
+            if (root.getSubcategories() == null) {
+                continue;
+            }
+            for (CategoryVO sub : root.getSubcategories()) {
+                order.put(sub.getId(), seq++);
+            }
+        }
+        return order;
+    }
+
+    /**
+     * 日历中每天列表的展示顺序：已完成在前 → 分类顺序 → 优先级高在前 → 创建时间早在前。
+     * <p>
+     * 末位以 createdAt、id 兜底，保证同键待办的顺序稳定（查询本身不带 ORDER BY，DB 返回顺序不保证）。
+     *
+     * @param categoryOrder 分类展示顺序表，见 {@link #buildCategoryOrder()}
+     */
+    private Comparator<TodoVO> dayDisplayOrder(Map<Long, Integer> categoryOrder) {
+        return Comparator
+                .comparingInt((TodoVO v) -> TodoStatus.DONE.getValue().equals(v.getStatus()) ? 0 : 1)
+                .thenComparingInt(v -> categoryRank(v.getCategoryId(), categoryOrder))
+                .thenComparing(Comparator.comparingInt((TodoVO v) -> priorityWeight(v.getPriority())).reversed())
+                .thenComparing(TodoVO::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(TodoVO::getId, Comparator.nullsLast(Comparator.naturalOrder()));
+    }
+
+    /** 未分类、以及分类已被删除的待办统一排在最后，与前端把「未分类」分组追加到末尾一致 */
+    private int categoryRank(Long categoryId, Map<Long, Integer> categoryOrder) {
+        if (categoryId == null) {
+            return Integer.MAX_VALUE;
+        }
+        return categoryOrder.getOrDefault(categoryId, Integer.MAX_VALUE);
+    }
+
+    /** 优先级排序权重；priority 为空时按默认的「中」处理（{@link Priority#of} 对 null 返回 null） */
+    private int priorityWeight(String priority) {
+        Priority p = Priority.of(priority);
+        return p == null ? Priority.MEDIUM.getWeight() : p.getWeight();
     }
 }
