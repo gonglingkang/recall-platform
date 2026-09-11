@@ -1095,11 +1095,14 @@ const saveKR = async () => {
           records: existingKR ? existingKR.records : []
         } as any)
       } else {
+        const isAlreadyDone = existingKR?.status === 'done'
         const updatePayload: any = {
           categoryId: krModal.categoryId,
           title: krModal.title.trim(),
-          remark: krModal.remark.trim(),
-          planCompleteDate: finalDate
+          remark: krModal.remark.trim()
+        }
+        if (!isAlreadyDone) {
+          updatePayload.planCompleteDate = finalDate
         }
         if (existingKR && existingKR.status !== krModal.status) {
           updatePayload.status = krModal.status
