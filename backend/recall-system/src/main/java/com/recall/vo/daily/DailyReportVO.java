@@ -27,6 +27,9 @@ public class DailyReportVO {
     @Schema(description = "工作内容列表")
     private List<DailyReportItemVO> items;
 
+    @Schema(description = "当天请假记录；无请假为 null")
+    private DailyLeaveVO leave;
+
     @Schema(description = "创建时间")
     private LocalDateTime createdAt;
 

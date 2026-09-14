@@ -23,4 +23,7 @@ public class DailyReportMonthVO {
 
     @Schema(description = "有日报的天(只含填了的,按日期升序)")
     private List<DailyReportVO> reports;
+
+    @Schema(description = "当月请假记录(按日期升序,独立于日报存在,可能含未写日报的请假天)")
+    private List<DailyLeaveVO> leaves;
 }

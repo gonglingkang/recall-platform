@@ -7,13 +7,16 @@ import com.recall.common.exception.BusinessException;
 import com.recall.dao.daily.DailyReportMapper;
 import com.recall.dto.daily.DailyReportItemReq;
 import com.recall.dto.daily.DailyReportSaveReq;
+import com.recall.entity.daily.DailyLeaveRecord;
 import com.recall.entity.daily.DailyReport;
 import com.recall.entity.daily.DailyReportItem;
 import com.recall.entity.todo.Todo;
+import com.recall.service.daily.DailyLeaveService;
 import com.recall.service.daily.DailyReportItemService;
 import com.recall.service.daily.DailyReportItemTodoService;
 import com.recall.service.daily.DailyReportService;
 import com.recall.service.todo.TodoService;
+import com.recall.vo.daily.DailyLeaveVO;
 import com.recall.vo.daily.DailyReportItemVO;
 import com.recall.vo.daily.DailyReportMonthVO;
 import com.recall.vo.daily.DailyReportVO;
@@ -55,6 +58,7 @@ public class DailyReportServiceImpl implements DailyReportService {
     private final DailyReportMapper dailyReportMapper;
     private final DailyReportItemService dailyReportItemService;
     private final DailyReportItemTodoService dailyReportItemTodoService;
+    private final DailyLeaveService dailyLeaveService;
     private final TodoService todoService;
 
     // ===================== 查询 =====================
@@ -73,12 +77,14 @@ public class DailyReportServiceImpl implements DailyReportService {
             return DailyReportMonthVO.builder()
                     .month(month)
                     .reports(Collections.emptyList())
+                    .leaves(dailyLeaveService.listByMonth(month))
                     .build();
         }
         List<DailyReportVO> vos = buildReportVOs(reports);
         return DailyReportMonthVO.builder()
                 .month(month)
                 .reports(vos)
+                .leaves(dailyLeaveService.listByMonth(month))
                 .build();
     }
 
@@ -232,6 +238,9 @@ public class DailyReportServiceImpl implements DailyReportService {
                 ? Collections.emptyMap()
                 : todoService.listByIds(allTodoIds, false).stream()
                 .collect(Collectors.toMap(Todo::getId, t -> t));
+        // 4. 一次查全部请假记录，按日期分组
+        List<LocalDate> reportDates = reports.stream().map(DailyReport::getReportDate).toList();
+        Map<LocalDate, DailyLeaveRecord> leaveByDate = dailyLeaveService.mapByDates(reportDates);
 
         List<DailyReportVO> result = new ArrayList<>(reports.size());
         for (DailyReport report : reports) {
@@ -251,10 +260,13 @@ public class DailyReportServiceImpl implements DailyReportService {
                         .todos(todoVOs)
                         .build());
             }
+            DailyLeaveRecord leave = leaveByDate.get(report.getReportDate());
+            DailyLeaveVO leaveVO = leave == null ? null : dailyLeaveService.toVO(leave);
             result.add(DailyReportVO.builder()
                     .id(report.getId())
                     .reportDate(report.getReportDate())
                     .items(itemVOs)
+                    .leave(leaveVO)
                     .createdAt(report.getCreatedAt())
                     .updatedAt(report.getUpdatedAt())
                     .build());

@@ -1,8 +1,11 @@
 package com.recall.controller.daily;
 
 import com.recall.common.api.Result;
+import com.recall.dto.daily.DailyLeaveSaveReq;
 import com.recall.dto.daily.DailyReportSaveReq;
+import com.recall.service.daily.DailyLeaveService;
 import com.recall.service.daily.DailyReportService;
+import com.recall.vo.daily.DailyLeaveVO;
 import com.recall.vo.daily.DailyReportMonthVO;
 import com.recall.vo.daily.DailyReportVO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,6 +44,7 @@ import java.time.LocalDate;
 public class DailyReportController {
 
     private final DailyReportService dailyReportService;
+    private final DailyLeaveService dailyLeaveService;
 
     @Operation(summary = "月度日报列表", description = "返回某月有日报的天（只含填了的，按日期升序），每个日报内嵌工作内容项与关联待办概要")
     @GetMapping
@@ -71,6 +75,22 @@ public class DailyReportController {
     public Result<Void> delete(@Parameter(description = "日期 YYYY-MM-DD")
                                @PathVariable @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         dailyReportService.delete(date);
+        return Result.ok();
+    }
+
+    @Operation(summary = "设置当天请假", description = "个人记录（无审批流，审批以 OA 为准）：不存在则建，存在则覆盖；日期不可为未来(4601)，类型/时段不合法(4603)")
+    @PutMapping("/{date}/leave")
+    public Result<DailyLeaveVO> saveLeave(@Parameter(description = "日期 YYYY-MM-DD")
+                                          @PathVariable @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
+                                          @Valid @RequestBody DailyLeaveSaveReq req) {
+        return Result.ok(dailyLeaveService.save(date, req));
+    }
+
+    @Operation(summary = "取消当天请假", description = "物理删除当天请假记录，不存在返回 404")
+    @DeleteMapping("/{date}/leave")
+    public Result<Void> deleteLeave(@Parameter(description = "日期 YYYY-MM-DD")
+                                    @PathVariable @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
+        dailyLeaveService.delete(date);
         return Result.ok();
     }
 }

@@ -218,6 +218,26 @@ CREATE TABLE `daily_report_item_todos` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='日报项-待办关联表';
 
 -- ---------------------------------------------------------------------
+-- 日报请假记录表 daily_leave_records
+-- 个人日报的请假纯记录（无审批流，审批以 OA 为准），一天一条，支持全天/半天。
+-- 后续可从 OA 同步，本表仅作个人查看记录。
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `daily_leave_records`;
+CREATE TABLE `daily_leave_records` (
+    `id`         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`    BIGINT       NOT NULL COMMENT '所属用户(数据隔离)',
+    `leave_date` DATE         NOT NULL COMMENT '请假日期(自然日,不可为未来)',
+    `leave_type` TINYINT      NOT NULL COMMENT '请假类型: 1病假 2年假 3事假 4育儿假',
+    `period`     TINYINT      NOT NULL COMMENT '请假时段: 1全天 2上午 3下午',
+    `reason`     VARCHAR(500) DEFAULT NULL COMMENT '请假事由(选填,仅作查看记录)',
+    `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    -- 一天一条：同用户同日期唯一
+    UNIQUE KEY `uk_user_date` (`user_id`, `leave_date`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='日报请假记录表';
+
+-- ---------------------------------------------------------------------
 -- 需求表 requirements
 -- 需求是需求文档/会议文档的归属载体，可 1:1 独占绑定一个关键成果 K。
 -- 绑 K 时，讨论中/进行中/开发完成三态由 K 状态映射驱动；未绑 K 时手动维护。

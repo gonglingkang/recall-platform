@@ -91,6 +91,18 @@
               <span class="status-badge" :class="day.type">
                 {{ day.typeLabel }}
               </span>
+
+              <!-- Leave Badge (悬停显示事由，自定义气泡) -->
+              <span
+                v-if="day.leave"
+                class="leave-badge"
+                :data-tooltip="day.leave.reason ? `事由：${day.leave.reason}` : null"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 11px; height: 11px;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                </svg>
+                请假：{{ day.leave.leaveTypeName }} · {{ day.leave.periodName }}
+              </span>
             </div>
 
             <!-- Center Items List Panel -->
@@ -144,9 +156,20 @@
 
             <!-- Right Actions Panel -->
             <div class="day-actions-panel" style="display: flex; align-items: center; gap: 8px; justify-content: flex-end; flex-shrink: 0; margin-left: auto;">
+              <!-- Leave Button -->
+              <button
+                class="action-btn leave-action-btn"
+                @click="openLeaveModal(day)"
+                title="请假"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                </svg>
+              </button>
+
               <!-- Edit Button -->
-              <button 
-                class="action-btn edit-action-btn" 
+              <button
+                class="action-btn edit-action-btn"
                 @click="openEditorModal(day)"
                 title="编辑日报"
               >
@@ -394,6 +417,140 @@
       </div>
     </div>
 
+    <!-- Leave Modal -->
+    <div v-if="leaveModal.isOpen" class="modal-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 2100;">
+      <div class="modal-content" style="max-width: 460px; padding: 24px; display: flex; flex-direction: column; gap: 16px; border-radius: var(--radius-lg); background: #fff; box-shadow: var(--shadow-xl); border: 1px solid var(--border-light);">
+        <div class="modal-header-with-close" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-light); padding-bottom: 12px;">
+          <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-main);">请假记录 - {{ leaveModal.dayLabel }}</h3>
+          <button class="modal-close-icon-btn" @click="leaveModal.isOpen = false" title="关闭弹窗" style="background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 18px; height: 18px;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 13px; font-weight: 600; color: var(--text-main);">请假类型</label>
+            <div class="custom-select-container" style="position: relative; width: 100%;">
+              <div
+                class="form-control beautiful-select-trigger"
+                @click.stop="isLeaveTypeDropdownOpen = !isLeaveTypeDropdownOpen"
+                :class="{ 'is-active': isLeaveTypeDropdownOpen }"
+                style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 0 10px; border: 1.5px solid var(--border-medium); border-radius: 6px; background: #fff; transition: all var(--transition-fast); height: 36px; user-select: none;"
+              >
+                <span
+                  style="font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                  :style="{ color: leaveModal.leaveType ? 'var(--text-main)' : 'var(--text-muted)' }"
+                >{{ leaveTypeLabel }}</span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="2.2"
+                  stroke="currentColor"
+                  style="width: 14px; height: 14px; transition: transform 0.2s; color: var(--text-muted); flex-shrink: 0;"
+                  :style="{ transform: isLeaveTypeDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </div>
+              <div
+                v-if="isLeaveTypeDropdownOpen"
+                class="custom-dropdown-list"
+                style="position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(0, 0, 0, 0.08); border-radius: var(--radius-md); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05); z-index: 999; padding: 6px; backdrop-filter: blur(12px); display: flex; flex-direction: column; gap: 4px;"
+              >
+                <div
+                  v-for="opt in LEAVE_TYPE_OPTIONS"
+                  :key="opt.value"
+                  @click="selectLeaveType(opt.value)"
+                  class="custom-dropdown-item"
+                  :class="{ 'is-selected': leaveModal.leaveType === opt.value }"
+                  style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: all 0.15s ease;"
+                >
+                  <span style="font-size: 13px; font-weight: 500; color: var(--text-main);">{{ opt.label }}</span>
+                  <svg
+                    v-if="leaveModal.leaveType === opt.value"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="2.5"
+                    stroke="var(--primary)"
+                    style="width: 14px; height: 14px; flex-shrink: 0;"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 13px; font-weight: 600; color: var(--text-main);">请假时段</label>
+            <div class="custom-select-container" style="position: relative; width: 100%;">
+              <div
+                class="form-control beautiful-select-trigger"
+                @click.stop="isLeavePeriodDropdownOpen = !isLeavePeriodDropdownOpen"
+                :class="{ 'is-active': isLeavePeriodDropdownOpen }"
+                style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 0 10px; border: 1.5px solid var(--border-medium); border-radius: 6px; background: #fff; transition: all var(--transition-fast); height: 36px; user-select: none;"
+              >
+                <span style="font-size: 13px; font-weight: 500; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ leavePeriodLabel }}</span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="2.2"
+                  stroke="currentColor"
+                  style="width: 14px; height: 14px; transition: transform 0.2s; color: var(--text-muted); flex-shrink: 0;"
+                  :style="{ transform: isLeavePeriodDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </div>
+              <div
+                v-if="isLeavePeriodDropdownOpen"
+                class="custom-dropdown-list"
+                style="position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(0, 0, 0, 0.08); border-radius: var(--radius-md); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05); z-index: 999; padding: 6px; backdrop-filter: blur(12px); display: flex; flex-direction: column; gap: 4px;"
+              >
+                <div
+                  v-for="opt in LEAVE_PERIOD_OPTIONS"
+                  :key="opt.value"
+                  @click="selectLeavePeriod(opt.value)"
+                  class="custom-dropdown-item"
+                  :class="{ 'is-selected': leaveModal.period === opt.value }"
+                  style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: all 0.15s ease;"
+                >
+                  <span style="font-size: 13px; font-weight: 500; color: var(--text-main);">{{ opt.label }}</span>
+                  <svg
+                    v-if="leaveModal.period === opt.value"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="2.5"
+                    stroke="var(--primary)"
+                    style="width: 14px; height: 14px; flex-shrink: 0;"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 13px; font-weight: 600; color: var(--text-main);">请假事由<span style="font-weight: 400; color: var(--text-muted);">（选填）</span></label>
+            <textarea v-model="leaveModal.reason" class="form-control" rows="3" maxlength="500" placeholder="请输入请假事由..." style="font-size: 13px; border: 1.5px solid var(--border-medium); border-radius: 6px; padding: 8px 10px; resize: vertical;"></textarea>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px;">
+          <button v-if="leaveModal.hasLeave" class="btn btn-secondary" style="color: #ef4444;" @click="deleteLeave">取消请假</button>
+          <button class="btn btn-secondary" @click="leaveModal.isOpen = false">关闭</button>
+          <button class="btn btn-primary" @click="saveLeave">保存</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Confirm Clear Daily Report Modal -->
     <div v-if="confirmModal.isOpen" class="modal-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 2100;">
       <div class="modal-content" style="max-width: 420px; padding: 24px; display: flex; flex-direction: column; gap: 16px; border-radius: var(--radius-lg); background: #fff; box-shadow: var(--shadow-xl); border: 1px solid var(--border-light);">
@@ -509,7 +666,21 @@ interface DayItem {
   typeLabel: string
   todos: any[]
   savedItems: DailyReportItem[]
+  leave?: any
 }
+
+// 请假类型/时段数字码与后端 LeaveType/LeavePeriod 枚举保持一致
+const LEAVE_TYPE_OPTIONS = [
+  { value: 1, label: '病假' },
+  { value: 2, label: '年假' },
+  { value: 3, label: '事假' },
+  { value: 4, label: '育儿假' }
+]
+const LEAVE_PERIOD_OPTIONS = [
+  { value: 1, label: '全天' },
+  { value: 2, label: '上午' },
+  { value: 3, label: '下午' }
+]
 
 interface WeekGroup {
   weekNum: number
@@ -605,10 +776,97 @@ const selectTodoForItem = (item: DailyReportItem, todoId: number | null) => {
 
 const closeAllDropdowns = () => {
   openDropdownItemId.value = null
+  isLeaveTypeDropdownOpen.value = false
+  isLeavePeriodDropdownOpen.value = false
 }
 
 const reportsMap = ref<Record<string, any>>({})
+const leavesMap = ref<Record<string, any>>({})
 const isLoadingReports = ref(false)
+
+const leaveModal = reactive({
+  isOpen: false,
+  dateStr: '',
+  dayLabel: '',
+  hasLeave: false,
+  leaveType: null as number | null,
+  period: 1,
+  reason: ''
+})
+
+const openLeaveModal = (day: DayItem) => {
+  leaveModal.dateStr = day.dateStr
+  leaveModal.dayLabel = day.dayLabel
+  const leave = leavesMap.value[day.dateStr]
+  leaveModal.hasLeave = !!leave
+  leaveModal.leaveType = leave ? leave.leaveType : null
+  leaveModal.period = leave ? leave.period : 1
+  leaveModal.reason = leave && leave.reason ? leave.reason : ''
+  isLeaveTypeDropdownOpen.value = false
+  isLeavePeriodDropdownOpen.value = false
+  leaveModal.isOpen = true
+}
+
+const isLeaveTypeDropdownOpen = ref(false)
+const isLeavePeriodDropdownOpen = ref(false)
+
+const leaveTypeLabel = computed(() =>
+  LEAVE_TYPE_OPTIONS.find(o => o.value === leaveModal.leaveType)?.label || '请选择请假类型'
+)
+const leavePeriodLabel = computed(() =>
+  LEAVE_PERIOD_OPTIONS.find(o => o.value === leaveModal.period)?.label || '请选择请假时段'
+)
+
+const selectLeaveType = (value: number) => {
+  leaveModal.leaveType = value
+  isLeaveTypeDropdownOpen.value = false
+}
+
+const selectLeavePeriod = (value: number) => {
+  leaveModal.period = value
+  isLeavePeriodDropdownOpen.value = false
+}
+
+const saveLeave = async () => {
+  if (!leaveModal.leaveType) {
+    const event = new CustomEvent('app-toast', { detail: { text: '请选择请假类型。', type: 'error' } })
+    window.dispatchEvent(event)
+    return
+  }
+  try {
+    const res = await request.put<any, ApiResult<any>>(`/api/daily-reports/${leaveModal.dateStr}/leave`, {
+      leaveType: leaveModal.leaveType,
+      period: leaveModal.period,
+      reason: leaveModal.reason.trim() || null
+    })
+    if (res && res.code === 200 && res.data) {
+      leavesMap.value[leaveModal.dateStr] = res.data
+      refreshTrigger.value++
+    }
+    leaveModal.isOpen = false
+    const event = new CustomEvent('app-toast', { detail: { text: `${leaveModal.dayLabel}请假记录已保存！` } })
+    window.dispatchEvent(event)
+  } catch (err) {
+    console.error('Failed to save leave:', err)
+    const event = new CustomEvent('app-toast', { detail: { text: '保存失败，请稍后重试。', type: 'error' } })
+    window.dispatchEvent(event)
+  }
+}
+
+const deleteLeave = async () => {
+  try {
+    await request.delete(`/api/daily-reports/${leaveModal.dateStr}/leave`)
+    delete leavesMap.value[leaveModal.dateStr]
+    refreshTrigger.value++
+    leaveModal.isOpen = false
+    const event = new CustomEvent('app-toast', { detail: { text: `${leaveModal.dayLabel}请假记录已取消！` } })
+    window.dispatchEvent(event)
+  } catch (err) {
+    console.error('Failed to delete leave:', err)
+    const event = new CustomEvent('app-toast', { detail: { text: '取消失败，请稍后重试。', type: 'error' } })
+    window.dispatchEvent(event)
+  }
+}
 
 const confirmModal = reactive({
   isOpen: false,
@@ -648,13 +906,20 @@ const fetchMonthlyReports = async (monthStr: string) => {
         map[rep.reportDate] = rep
       })
       reportsMap.value = map
+      const leaveMap: Record<string, any> = {}
+      ;(res.data.leaves || []).forEach((lv: any) => {
+        leaveMap[lv.leaveDate] = lv
+      })
+      leavesMap.value = leaveMap
       scrollToTodayWeek()
     } else {
       reportsMap.value = {}
+      leavesMap.value = {}
     }
   } catch (err) {
     console.error('Failed to fetch monthly daily reports:', err)
     reportsMap.value = {}
+    leavesMap.value = {}
   } finally {
     isLoadingReports.value = false
   }
@@ -782,7 +1047,8 @@ const weeklyGroups = computed(() => {
       type,
       typeLabel: label,
       todos: dayTodos,
-      savedItems
+      savedItems,
+      leave: leavesMap.value[dateStr] || null
     })
   }
   
@@ -1395,6 +1661,88 @@ onBeforeUnmount(() => {
 .delete-action-btn:hover {
   background-color: rgba(239, 68, 68, 0.08);
   color: #ef4444 !important;
+}
+
+.leave-action-btn:hover {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: #b45309 !important;
+}
+
+/* 请假徽章：悬停显示事由的自定义气泡（替代原生 title 提示） */
+.leave-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: #fef3c7;
+  color: #b45309;
+  width: fit-content;
+  cursor: default;
+}
+.leave-badge[data-tooltip]::before {
+  content: '';
+  position: absolute;
+  left: calc(100% + 3px);
+  top: 50%;
+  transform: translateY(-50%);
+  border: 6px solid transparent;
+  border-left-color: rgba(15, 23, 42, 0.92);
+  border-right: none;
+  z-index: 1200;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.leave-badge[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(15, 23, 42, 0.92);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  padding: 6px 10px;
+  border-radius: 6px;
+  width: max-content;
+  max-width: 240px;
+  z-index: 1200;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.leave-badge[data-tooltip]:hover::before,
+.leave-badge[data-tooltip]:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* 自定义下拉框交互样式（与其他页面保持一致） */
+.beautiful-select-trigger:hover {
+  border-color: #2563eb !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.05);
+}
+.beautiful-select-trigger.is-active {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+}
+.custom-dropdown-item:hover {
+  background-color: #f1f5f9 !important;
+}
+.custom-dropdown-item.is-selected {
+  background-color: #eff6ff !important;
+}
+.custom-dropdown-item.is-selected span {
+  color: #2563eb !important;
 }
 
 /* Styled Buttons */

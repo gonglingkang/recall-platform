@@ -34,6 +34,7 @@ public enum ResultCode {
     // --- 日报错误 46xx ---
     DAILY_REPORT_FUTURE_DATE(4601, "不能填写未来日期的日报"),
     DAILY_TODO_NOT_RELATED(4602, "待办在该日期不可关联"),
+    DAILY_LEAVE_PARAM_INVALID(4603, "请假类型或时段不合法"),
 
     // --- 需求错误 47xx ---
     REQUIREMENT_TITLE_DUPLICATED(4701, "需求标题已存在"),
