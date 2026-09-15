@@ -10,9 +10,11 @@ import com.recall.entity.daily.DailyLeaveRecord;
 import com.recall.enums.LeavePeriod;
 import com.recall.enums.LeaveType;
 import com.recall.service.daily.DailyLeaveService;
+import com.recall.service.oa.event.DailyChangedEvent;
 import com.recall.vo.daily.DailyLeaveVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -44,6 +46,7 @@ import java.util.stream.Collectors;
 public class DailyLeaveServiceImpl implements DailyLeaveService {
 
     private final DailyLeaveRecordMapper dailyLeaveRecordMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public DailyLeaveVO save(LocalDate date, DailyLeaveSaveReq req) {
@@ -77,6 +80,7 @@ public class DailyLeaveServiceImpl implements DailyLeaveService {
             dailyLeaveRecordMapper.updateById(record);
             log.info("更新请假记录: userId={}, date={}, type={}, period={}", userId, date, type, period);
         }
+        eventPublisher.publishEvent(new DailyChangedEvent(userId, date));
         return toVO(record);
     }
 
@@ -85,6 +89,7 @@ public class DailyLeaveServiceImpl implements DailyLeaveService {
         Long userId = UserContextHolder.requireUserId();
         DailyLeaveRecord record = loadOwnedByDate(userId, date);
         dailyLeaveRecordMapper.deleteById(record.getId());
+        eventPublisher.publishEvent(new DailyChangedEvent(userId, date));
         log.info("删除请假记录: userId={}, date={}", userId, date);
     }
 
@@ -108,12 +113,12 @@ public class DailyLeaveServiceImpl implements DailyLeaveService {
     }
 
     @Override
-    public Map<LocalDate, DailyLeaveRecord> mapByDates(Collection<LocalDate> dates) {
-        if (dates == null || dates.isEmpty()) {
+    public Map<LocalDate, DailyLeaveRecord> mapByDates(Long userId, Collection<LocalDate> dates) {
+        if (userId == null || dates == null || dates.isEmpty()) {
             return Collections.emptyMap();
         }
         List<DailyLeaveRecord> records = dailyLeaveRecordMapper.selectList(new LambdaQueryWrapper<DailyLeaveRecord>()
-                .eq(DailyLeaveRecord::getUserId, UserContextHolder.requireUserId())
+                .eq(DailyLeaveRecord::getUserId, userId)
                 .in(DailyLeaveRecord::getLeaveDate, dates));
         return records.stream().collect(Collectors.toMap(DailyLeaveRecord::getLeaveDate, r -> r));
     }

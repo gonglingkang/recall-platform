@@ -45,6 +45,11 @@ recall:
     secret: recall-platform-jwt-secret-please-change-in-production-0123456789
     # 过期时间 7 天（毫秒）
     expiration-millis: 604800000
+  oa:
+    # OA 密码加密密钥（AES-GCM 口令，生产环境务必更换）
+    crypto-key: recall-platform-oa-crypto-key-please-change-0123456789
+    # 是否无头运行同步浏览器；联调排查时置 false 可观察浏览器操作过程
+    debug-headless: true
 
 logging:
   level:

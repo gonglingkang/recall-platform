@@ -46,6 +46,12 @@ public enum ResultCode {
     REQUIREMENT_CATEGORY_HAS_REQUIREMENT(4712, "该分类下有需求，无法删除"),
     REQUIREMENT_SUB_CATEGORY_PARENT_MISMATCH(4713, "子分类的父分类与传入主分类不一致"),
 
+    // --- OA 对接错误 48xx ---
+    OA_CONFIG_INCOMPLETE(4801, "OA 对接配置不完整，请先在系统设置中完善"),
+    OA_SYNC_RUNNING(4802, "该周正在同步中，请勿重复触发"),
+    OA_SYNC_FAILED(4803, "同步到 OA 失败"),
+    OA_SYNC_WEEK_OUT_OF_RANGE(4804, "只能同步本周或上周的周报（OA 工时填报有时效）"),
+
     // --- 服务器错误 5xx ---
     INTERNAL_ERROR(500, "服务器内部错误"),
     SERVICE_UNAVAILABLE(503, "服务暂不可用");

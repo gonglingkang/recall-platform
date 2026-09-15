@@ -97,6 +97,89 @@
           </button>
         </form>
       </div>
+
+      <!-- 3. OA 对接配置 card -->
+      <div class="settings-card premium-card full-width">
+        <h3>🔗 OA 对接配置</h3>
+        <p class="card-sub">用于把个人日报同步到公司 OA「工时日填报」（只暂存待办，最终提交请在 OA 端人工完成）</p>
+
+        <form @submit.prevent="handleSaveOaConfig" class="settings-form">
+          <div class="oa-field-row">
+            <div class="form-field oa-grow">
+              <label for="oa-url">OA 地址</label>
+              <input
+                id="oa-url"
+                v-model="oaForm.oaBaseUrl"
+                type="text"
+                required
+                class="form-control"
+                placeholder="https://erp.zoesoft.com.cn/seeyon"
+              />
+            </div>
+            <div class="form-field oa-grow">
+              <label for="oa-username">OA 账号</label>
+              <input
+                id="oa-username"
+                v-model="oaForm.username"
+                type="text"
+                required
+                class="form-control"
+                placeholder="OA 登录账号"
+              />
+            </div>
+            <div class="form-field oa-grow">
+              <label for="oa-password">OA 密码</label>
+              <input
+                id="oa-password"
+                v-model="oaForm.password"
+                type="password"
+                class="form-control"
+                :placeholder="oaHasPassword ? '已配置，留空表示不修改' : '首次配置必填'"
+              />
+            </div>
+          </div>
+
+          <div class="oa-field-row">
+            <div class="form-field oa-grow">
+              <label for="oa-dev-project">研发项目名</label>
+              <input
+                id="oa-dev-project"
+                v-model="oaForm.devProjectName"
+                type="text"
+                required
+                class="form-control"
+                placeholder="如：中台底座（三期）"
+              />
+            </div>
+            <div class="form-field oa-grow">
+              <label for="oa-leave-project">请假项目名</label>
+              <input
+                id="oa-leave-project"
+                v-model="oaForm.leaveProjectName"
+                type="text"
+                required
+                class="form-control"
+                placeholder="如：请假-产研中心中台事业群中台架构研发部"
+              />
+            </div>
+          </div>
+
+          <div class="pref-item">
+            <div class="pref-text">
+              <h4>保存日报后自动同步</h4>
+              <p>开启后，日报/请假保存成功会自动把该周内容同步到 OA（手动「同步OA」按钮始终可用）</p>
+            </div>
+            <label class="toggle-control">
+              <input v-model="oaForm.autoSync" type="checkbox" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <button type="submit" class="submit-btn" :disabled="oaLoading">
+            {{ oaLoading ? '正在保存...' : '保存 OA 配置' }}
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 </template>
@@ -105,6 +188,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTodoStore } from '@/stores/todo'
+import { getOaConfig, saveOaConfig, type OaConfigSaveReq } from '@/api/oa'
 
 const authStore = useAuthStore()
 const todoStore = useTodoStore()
@@ -116,6 +200,8 @@ const errorMsg = ref('')
 
 const profileLoading = ref(false)
 const pwdLoading = ref(false)
+const oaLoading = ref(false)
+const oaHasPassword = ref(false)
 
 const profileForm = reactive({
   nickname: '',
@@ -128,6 +214,15 @@ const pwdForm = reactive({
   confirmPassword: ''
 })
 
+const oaForm = reactive<OaConfigSaveReq>({
+  oaBaseUrl: 'https://erp.zoesoft.com.cn/seeyon',
+  username: '',
+  password: '',
+  devProjectName: '中台底座（三期）',
+  leaveProjectName: '请假-产研中心中台事业群中台架构研发部',
+  autoSync: false
+})
+
 onMounted(() => {
   if (authStore.currentUser) {
     profileForm.nickname = authStore.currentUser.nickname || authStore.currentUser.username
@@ -135,7 +230,42 @@ onMounted(() => {
     // Load categories for selector
     todoStore.refreshCategories(authStore.currentUser.userId)
   }
+  loadOaConfig()
 })
+
+const loadOaConfig = async () => {
+  try {
+    const res = await getOaConfig()
+    if (res.data) {
+      oaForm.oaBaseUrl = res.data.oaBaseUrl
+      oaForm.username = res.data.username
+      oaForm.devProjectName = res.data.devProjectName
+      oaForm.leaveProjectName = res.data.leaveProjectName
+      oaForm.autoSync = res.data.autoSync
+      oaHasPassword.value = res.data.hasPassword
+    }
+  } catch {
+    // 未配置时不提示，表单保持默认值
+  }
+}
+
+const handleSaveOaConfig = async () => {
+  oaLoading.value = true
+  try {
+    await saveOaConfig({
+      ...oaForm,
+      // 留空表示不修改密码
+      password: oaForm.password || undefined
+    })
+    triggerAlert('success', '🔗 OA 对接配置保存成功！')
+    oaForm.password = ''
+    await loadOaConfig()
+  } catch (err: any) {
+    triggerAlert('error', err.message || 'OA 配置保存失败')
+  } finally {
+    oaLoading.value = false
+  }
+}
 
 const triggerAlert = (type: 'success' | 'error', msg: string) => {
   if (type === 'success') {
@@ -325,6 +455,15 @@ const handleUpdatePassword = async () => {
 }
 
 /* Preference items list rules */
+.oa-field-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.oa-field-row .oa-grow {
+  flex: 1;
+  min-width: 220px;
+}
 .preference-list {
   display: flex;
   flex-direction: column;

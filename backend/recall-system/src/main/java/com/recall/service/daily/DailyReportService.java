@@ -1,6 +1,7 @@
 package com.recall.service.daily;
 
 import com.recall.dto.daily.DailyReportSaveReq;
+import com.recall.entity.daily.DailyReport;
 import com.recall.vo.daily.DailyReportMonthVO;
 import com.recall.vo.daily.DailyReportVO;
 
@@ -58,4 +59,15 @@ public interface DailyReportService {
      * @param date 日期 YYYY-MM-DD
      */
     void delete(LocalDate date);
+
+    /**
+     * 查询指定用户在日期区间（含边界）内的日报实体（按日期升序）。
+     * <p>轻量查询：只返回主表实体，显式传 userId 以支持无请求上下文的异步场景（如 OA 同步线程）。
+     *
+     * @param userId 用户
+     * @param start  起始日期（含）
+     * @param end    结束日期（含）
+     * @return 日报实体列表；无数据返回空列表
+     */
+    List<DailyReport> listByDateRange(Long userId, LocalDate start, LocalDate end);
 }

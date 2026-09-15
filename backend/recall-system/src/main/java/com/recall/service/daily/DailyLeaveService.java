@@ -64,12 +64,14 @@ public interface DailyLeaveService {
     DailyLeaveRecord getByDate(LocalDate date);
 
     /**
-     * 批量查询当前用户多天的请假记录（避免日报列表 N+1）。
+     * 批量查询指定用户多天的请假记录（避免日报列表 N+1）。
+     * <p>显式传 userId 以支持无请求上下文的异步场景（如 OA 同步线程）。
      *
-     * @param dates 请假日期集合
+     * @param userId 用户
+     * @param dates  请假日期集合
      * @return 日期 -> 请假记录实体；无记录的日期不在 Map 中
      */
-    Map<LocalDate, DailyLeaveRecord> mapByDates(Collection<LocalDate> dates);
+    Map<LocalDate, DailyLeaveRecord> mapByDates(Long userId, Collection<LocalDate> dates);
 
     /**
      * 请假记录实体转 VO（补充类型/时段中文名称）。

@@ -307,3 +307,46 @@ CREATE TABLE `requirement_categories` (
     UNIQUE KEY `uk_user_parent_name` (`user_id`, `parent_key`, `name`),
     KEY `idx_user_parent` (`user_id`, `parent_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='需求分类表(两级,单表+parentId)';
+
+-- ---------------------------------------------------------------------
+-- OA 对接配置表 oa_user_config（每人一份，日报同步到 OA 用）
+-- 密码 AES-GCM 加密存储，密钥在应用配置 oa.crypto.key。
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `oa_user_config`;
+CREATE TABLE `oa_user_config` (
+    `id`                 BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`            BIGINT       NOT NULL COMMENT '所属用户(数据隔离)',
+    `oa_base_url`        VARCHAR(200) NOT NULL DEFAULT 'https://erp.zoesoft.com.cn/seeyon' COMMENT 'OA 根地址',
+    `username`           VARCHAR(100) NOT NULL COMMENT 'OA 登录账号',
+    `password_cipher`    VARCHAR(500) NOT NULL COMMENT 'OA 登录密码(AES-GCM 密文,Base64)',
+    `dev_project_name`   VARCHAR(200) NOT NULL COMMENT '研发项目名(项目组选择器匹配用)',
+    `leave_project_name` VARCHAR(200) NOT NULL COMMENT '请假项目名(项目组选择器匹配用)',
+    `auto_sync`          TINYINT      NOT NULL DEFAULT 0 COMMENT '日报保存后自动同步: 0关/1开',
+    `created_at`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_id` (`user_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='OA 对接配置表(每人一份)';
+
+-- ---------------------------------------------------------------------
+-- OA 同步日志表 oa_sync_logs（一次同步一条，按周幂等）
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `oa_sync_logs`;
+CREATE TABLE `oa_sync_logs` (
+    `id`          BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`     BIGINT        NOT NULL COMMENT '所属用户(数据隔离)',
+    `week_start`  DATE          NOT NULL COMMENT '平台周起始(周一)',
+    `trigger_type` TINYINT      NOT NULL COMMENT '触发方式: 1自动 2手动',
+    `status`      TINYINT       NOT NULL COMMENT '状态: 1运行中 2成功 3失败',
+    `step`        VARCHAR(50)   DEFAULT NULL COMMENT '执行到哪一步(失败定位用)',
+    `error_msg`   VARCHAR(1000) DEFAULT NULL COMMENT '失败原因',
+    `deadline`    DATETIME      DEFAULT NULL COMMENT 'OA工时提交截止时间(同步时从表单读取)',
+    `oa_submitted` TINYINT      DEFAULT NULL COMMENT '同步时OA端该周工时是否已填报: 0否 1是',
+    `start_time`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '开始时间',
+    `end_time`    DATETIME      DEFAULT NULL COMMENT '结束时间',
+    `created_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_user_week` (`user_id`, `week_start`),
+    KEY `idx_user_status` (`user_id`, `status`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='OA 同步日志表';

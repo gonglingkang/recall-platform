@@ -36,3 +36,9 @@ desktop.ini
 *.tmp
 *.bak
 *.cache
+
+# Claude Code 本地个人配置
+.claude/settings.local.json
+
+# Playwright MCP 浏览器快照/截图等本地产物
+.playwright-mcp/

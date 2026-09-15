@@ -69,6 +69,56 @@
         <div class="week-header-row">
           <div class="week-num-badge">第 {{ toChineseNumeral(group.weekNum) }} 周</div>
           <span class="week-range-label">{{ group.weekRangeLabel }}</span>
+          <div class="week-sync-area">
+            <template v-if="isSyncableWeek(group)">
+              <span
+                v-if="syncStates[weekKeyOf(group)]"
+                class="week-sync-status"
+                :class="syncStatusClass(weekKeyOf(group))"
+              >
+                <template v-if="syncStates[weekKeyOf(group)].status === 'running'">
+                  {{ syncStates[weekKeyOf(group)].step || '同步中' }}...
+                </template>
+                <template v-else-if="syncStates[weekKeyOf(group)].status === 'success'">
+                  <span v-if="syncStates[weekKeyOf(group)].oaSubmitted">已在OA提交</span>
+                  <span v-else-if="syncStates[weekKeyOf(group)].deadlineOverdue" class="week-sync-error">
+                    已过截止 {{ formatShortTime(syncStates[weekKeyOf(group)].deadline) }}
+                  </span>
+                  <span
+                    v-else
+                    :class="{ 'week-sync-urgent': syncStates[weekKeyOf(group)].needSubmit }"
+                    :title="syncStates[weekKeyOf(group)].needSubmit ? '该周已结束，请尽快在 OA 提交工时' : ''"
+                  >
+                    {{ syncStates[weekKeyOf(group)].needSubmit ? '待OA提交！' : '已同步OA' }}
+                    <template v-if="syncStates[weekKeyOf(group)].deadline">
+                      截止 {{ formatShortTime(syncStates[weekKeyOf(group)].deadline) }}
+                    </template>
+                  </span>
+                </template>
+                <template v-else>
+                  <span class="week-sync-error" @click="handleSyncOa(group)" title="点击重试">
+                    同步失败：{{ syncStates[weekKeyOf(group)].errorMsg || '未知原因' }}，点击重试
+                  </span>
+                </template>
+              </span>
+              <button
+                class="week-sync-btn"
+                :disabled="syncStates[weekKeyOf(group)]?.status === 'running'"
+                @click="handleSyncOa(group)"
+                title="把本周日报同步到 OA 工时日填报（只暂存待办，提交请在 OA 端人工完成）"
+              >
+                <svg
+                  v-if="syncStates[weekKeyOf(group)]?.status !== 'running'"
+                  xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
+                  style="width: 13px; height: 13px;"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                <span v-else class="week-sync-spinner"></span>
+                同步OA
+              </button>
+            </template>
+          </div>
         </div>
 
         <!-- Days in Week List -->
@@ -581,6 +631,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useTodoStore } from '@/stores/todo'
 import request from '@/api/request'
 import type { ApiResult } from '@/api/types'
+import { triggerOaSync, getOaSyncStatus, OA_SYNC_STATUS, type OaSyncLog } from '@/api/oa'
 
 const route = useRoute()
 const router = useRouter()
@@ -1095,6 +1146,152 @@ const formatRangeLabel = (dateStr: string) => {
   return `${m}.${d}`
 }
 
+// ===================== OA 同步 =====================
+
+type SyncState = {
+  status: 'running' | 'success' | 'failed'
+  step?: string
+  errorMsg?: string
+  /** OA 工时提交截止时间 */
+  deadline?: string
+  /** OA 端该周工时是否已填报（已提交） */
+  oaSubmitted?: boolean
+  /** 该周已结束（进入下一周，如周一）仍未提交 → 高亮提醒 */
+  needSubmit?: boolean
+  /** 已过 OA 截止时间仍未提交 */
+  deadlineOverdue?: boolean
+}
+const syncStates = reactive<Record<string, SyncState>>({})
+const syncTimers = new Map<string, ReturnType<typeof setInterval>>()
+
+/** 取某周组的周一日期（后端按平台周归一，需传周一） */
+const weekKeyOf = (group: WeekGroup) => {
+  const first = group.days[0].dateStr
+  const [y, m, d] = first.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  const dow = dt.getDay() === 0 ? 7 : dt.getDay()
+  dt.setDate(dt.getDate() - (dow - 1))
+  const yy = dt.getFullYear()
+  const mm = String(dt.getMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+/** 仅本周与上周提供同步（OA 工时填报有时效，更早的周协同已关闭） */
+const isSyncableWeek = (group: WeekGroup) => {
+  const key = weekKeyOf(group)
+  const now = new Date()
+  const dow = now.getDay() === 0 ? 7 : now.getDay()
+  const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (dow - 1))
+  const [y, m, d] = key.split('-').map(Number)
+  const weekStart = new Date(y, m - 1, d)
+  const lastMonday = new Date(thisMonday)
+  lastMonday.setDate(lastMonday.getDate() - 7)
+  return weekStart.getTime() === thisMonday.getTime() || weekStart.getTime() === lastMonday.getTime()
+}
+
+/** 截止时间短格式：MM-DD HH:mm */
+const formatShortTime = (deadline?: string) => {
+  if (!deadline) return ''
+  const dt = new Date(deadline)
+  const mm = String(dt.getMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getDate()).padStart(2, '0')
+  const hh = String(dt.getHours()).padStart(2, '0')
+  const mi = String(dt.getMinutes()).padStart(2, '0')
+  return `${mm}-${dd} ${hh}:${mi}`
+}
+
+const applyLog = (key: string, log: OaSyncLog | null) => {
+  if (!log) return
+  if (log.status === OA_SYNC_STATUS.RUNNING) {
+    syncStates[key] = { status: 'running', step: log.step || '同步中' }
+    return
+  }
+  if (log.status === OA_SYNC_STATUS.FAILED) {
+    syncStates[key] = { status: 'failed', errorMsg: log.errorMsg || '未知原因' }
+    return
+  }
+  // 成功：结合截止时间与 OA 提交状态生成提醒标识
+  const deadline = log.deadline || undefined
+  const oaSubmitted = log.oaSubmitted === true
+  const now = new Date()
+  const [wy, wm, wd] = key.split('-').map(Number)
+  // 该周的下周一 = weekStart + 7 天（进入下一周仍未提交 → 需要提交）
+  const nextWeekStart = new Date(wy, wm - 1, wd + 7)
+  const deadlineAt = deadline ? new Date(deadline) : null
+  syncStates[key] = {
+    status: 'success',
+    deadline,
+    oaSubmitted,
+    needSubmit: !oaSubmitted && now.getTime() >= nextWeekStart.getTime(),
+    deadlineOverdue: !oaSubmitted && !!deadlineAt && now.getTime() > deadlineAt.getTime()
+  }
+}
+
+/** 状态文案配色：待提交高亮为警告色 */
+const syncStatusClass = (key: string) => {
+  const st = syncStates[key]
+  if (!st) return 'sync-success'
+  if (st.status !== 'success') return 'sync-' + st.status
+  if (st.oaSubmitted) return 'sync-success'
+  if (st.deadlineOverdue) return 'sync-failed'
+  return st.needSubmit ? 'sync-urgent' : 'sync-success'
+}
+
+/** 轮询同步状态（2s 一次，上限 5 分钟） */
+const pollStatus = (key: string) => {
+  if (syncTimers.has(key)) return
+  const startedAt = Date.now()
+  const timer = setInterval(async () => {
+    try {
+      const res = await getOaSyncStatus(key)
+      applyLog(key, res.data)
+      const stillRunning = res.data?.status === OA_SYNC_STATUS.RUNNING
+      const timeout = Date.now() - startedAt > 5 * 60 * 1000
+      if (!stillRunning || timeout) {
+        clearInterval(timer!)
+        syncTimers.delete(key)
+        if (stillRunning) {
+          syncStates[key] = { status: 'failed', errorMsg: '同步超时，请稍后在 OA 确认' }
+        }
+      }
+    } catch {
+      clearInterval(timer!)
+      syncTimers.delete(key)
+    }
+  }, 2000)
+  syncTimers.set(key, timer)
+}
+
+const handleSyncOa = async (group: WeekGroup) => {
+  const key = weekKeyOf(group)
+  if (syncStates[key]?.status === 'running') return
+  try {
+    await triggerOaSync(key)
+    syncStates[key] = { status: 'running', step: '准备同步' }
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: { text: '已开始同步到 OA，约需 1-3 分钟', type: 'success' } }))
+    pollStatus(key)
+  } catch (err: any) {
+    // 错误 toast 已由 request 拦截器统一弹出，这里同步内联状态
+    syncStates[key] = { status: 'failed', errorMsg: err.message || '触发失败' }
+  }
+}
+
+// 月度数据加载后，初始化各周已有的同步状态（页面刷新后恢复展示）
+watch(weeklyGroups, (groups) => {
+  groups.forEach(async (group) => {
+    const key = weekKeyOf(group)
+    if (syncStates[key]) return
+    try {
+      const res = await getOaSyncStatus(key)
+      applyLog(key, res.data)
+      if (res.data?.status === OA_SYNC_STATUS.RUNNING) pollStatus(key)
+    } catch {
+      // 忽略：视为未同步
+    }
+  })
+}, { immediate: true })
+
 const getTodoTitle = (todos: any[], todoId: number) => {
   const todo = todos.find(t => t.id === todoId)
   return todo ? todo.title : ''
@@ -1312,6 +1509,74 @@ onBeforeUnmount(() => {
   font-size: 13.5px;
   font-weight: 600;
   color: var(--text-muted);
+}
+
+.week-sync-area {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.week-sync-status {
+  font-size: 12px;
+  font-weight: 600;
+}
+.week-sync-status.sync-running {
+  color: var(--primary);
+}
+.week-sync-status.sync-success {
+  color: var(--success, #16a34a);
+}
+.week-sync-status.sync-failed {
+  color: var(--danger, #dc2626);
+}
+.week-sync-status.sync-urgent {
+  color: #d97706;
+  background: #fef3c7;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 800;
+}
+.week-sync-error {
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.week-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--primary-light);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.week-sync-btn:hover:not(:disabled) {
+  background: var(--primary);
+  color: #fff;
+}
+.week-sync-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.week-sync-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(37, 99, 235, 0.25);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: week-sync-spin 0.8s linear infinite;
+}
+@keyframes week-sync-spin {
+  to { transform: rotate(360deg); }
 }
 
 .week-days-list {

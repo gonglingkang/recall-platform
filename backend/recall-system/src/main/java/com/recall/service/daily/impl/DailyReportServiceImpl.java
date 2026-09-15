@@ -15,6 +15,7 @@ import com.recall.service.daily.DailyLeaveService;
 import com.recall.service.daily.DailyReportItemService;
 import com.recall.service.daily.DailyReportItemTodoService;
 import com.recall.service.daily.DailyReportService;
+import com.recall.service.oa.event.DailyChangedEvent;
 import com.recall.service.todo.TodoService;
 import com.recall.vo.daily.DailyLeaveVO;
 import com.recall.vo.daily.DailyReportItemVO;
@@ -23,6 +24,7 @@ import com.recall.vo.daily.DailyReportVO;
 import com.recall.vo.daily.RelatedTodoVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +62,7 @@ public class DailyReportServiceImpl implements DailyReportService {
     private final DailyReportItemTodoService dailyReportItemTodoService;
     private final DailyLeaveService dailyLeaveService;
     private final TodoService todoService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ===================== 查询 =====================
 
@@ -92,6 +95,15 @@ public class DailyReportServiceImpl implements DailyReportService {
     public DailyReportVO getByDate(LocalDate date) {
         DailyReport report = loadOwnedByDate(date);
         return buildReportVOs(List.of(report)).get(0);
+    }
+
+    @Override
+    public List<DailyReport> listByDateRange(Long userId, LocalDate start, LocalDate end) {
+        return dailyReportMapper.selectList(new LambdaQueryWrapper<DailyReport>()
+                .eq(DailyReport::getUserId, userId)
+                .ge(DailyReport::getReportDate, start)
+                .le(DailyReport::getReportDate, end)
+                .orderByAsc(DailyReport::getReportDate));
     }
 
     // ===================== 写操作 =====================
@@ -130,6 +142,8 @@ public class DailyReportServiceImpl implements DailyReportService {
         }
         // 4. 全量覆盖日报项与关联（多条写，并入本事务）
         dailyReportItemService.replaceByReportId(report.getId(), req.getItems());
+        // 5. 发布日报变更事件（OA 自动同步监听，AFTER_COMMIT 消费）
+        eventPublisher.publishEvent(new DailyChangedEvent(userId, date));
         // 重新查主表拿 updatedAt
         DailyReport saved = dailyReportMapper.selectById(report.getId());
         return buildReportVOs(List.of(saved)).get(0);
@@ -147,6 +161,7 @@ public class DailyReportServiceImpl implements DailyReportService {
         DailyReport report = loadOwnedByDate(date);
         dailyReportItemService.deleteByReportId(report.getId());
         dailyReportMapper.deleteById(report.getId());
+        eventPublisher.publishEvent(new DailyChangedEvent(report.getUserId(), date));
         log.info("删除日报: userId={}, date={}", UserContextHolder.requireUserId(), date);
     }
 
@@ -240,7 +255,8 @@ public class DailyReportServiceImpl implements DailyReportService {
                 .collect(Collectors.toMap(Todo::getId, t -> t));
         // 4. 一次查全部请假记录，按日期分组
         List<LocalDate> reportDates = reports.stream().map(DailyReport::getReportDate).toList();
-        Map<LocalDate, DailyLeaveRecord> leaveByDate = dailyLeaveService.mapByDates(reportDates);
+        Map<LocalDate, DailyLeaveRecord> leaveByDate =
+                dailyLeaveService.mapByDates(reports.get(0).getUserId(), reportDates);
 
         List<DailyReportVO> result = new ArrayList<>(reports.size());
         for (DailyReport report : reports) {
