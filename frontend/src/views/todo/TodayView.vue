@@ -28,12 +28,6 @@
           </div>
         </div>
 
-        <button class="add-todo-btn" @click="openAddModal">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          <span>新增待办</span>
-        </button>
       </div>
     </div>
 
@@ -55,6 +49,14 @@
               <span class="group-count-badge" :style="{ backgroundColor: `${group.color}12`, color: group.color }">
                 {{ group.totalCount }}
               </span>
+              <button
+                class="group-add-todo-btn"
+                :style="{ backgroundColor: group.color }"
+                @click.stop="openAddModal(typeof group.id === 'number' ? group.id : null)"
+                title="在此分类下新增待办"
+              >
+                <span>新增待办</span>
+              </button>
             </div>
           </div>
 
@@ -519,9 +521,18 @@
                     class="custom-dropdown-list"
                     style="position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(0, 0, 0, 0.08); border-radius: var(--radius-md); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05); z-index: 999; padding: 6px; backdrop-filter: blur(12px); display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto;"
                   >
-                    <template v-for="cat in categories" :key="cat.id">
+                    <!-- 未分类入口：锁定为不归属任何分类，无其他选项 -->
+                    <div
+                      v-if="addScopeCategoryId === null"
+                      class="custom-dropdown-item parent-category-item is-selected"
+                      style="display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 6px; cursor: pointer; transition: all 0.15s ease;"
+                    >
+                      <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background-color: #94a3b8;"></span>
+                      <span style="font-size: 13.5px; font-weight: 600; color: var(--text-main);">未分类（不归属任何分类）</span>
+                    </div>
+                    <template v-for="cat in scopedCategories" :key="cat.id">
                       <!-- Parent Category Option -->
-                      <div 
+                      <div
                         @click="selectCategory(cat.id, null)"
                         class="custom-dropdown-item parent-category-item"
                         :class="{ 'is-selected': addForm.categoryId === cat.id && addForm.subcategoryId === null }"
@@ -834,7 +845,10 @@ const closeDropdowns = () => {
 
 const currentCategoryOption = computed(() => {
   if (addForm.categoryId === null) {
-    return { name: '选择分类', color: '#94a3b8' }
+    // 未分类组入口锁定为"不归属任何分类"
+    return addScopeCategoryId.value === null
+      ? { name: '未分类（不归属任何分类）', color: '#94a3b8' }
+      : { name: '选择分类', color: '#94a3b8' }
   }
   const cat = categories.value.find(c => c.id === addForm.categoryId)
   if (!cat) return { name: '选择分类', color: '#94a3b8' }
@@ -1024,10 +1038,23 @@ const handleOverlayClick = (e: MouseEvent, closeCallback: () => void) => {
 }
 
 // Modal Actions
-const openAddModal = () => {
+// 新增弹窗的归属分类锁定范围：number=仅该分类（及其子分类）；null=未分类；undefined=全部可选
+const addScopeCategoryId = ref<number | null | undefined>(undefined)
+
+// 锁定范围时的下拉可选项：仅本分类及其子分类
+const scopedCategories = computed(() => {
+  if (addScopeCategoryId.value === undefined) return categories.value
+  if (addScopeCategoryId.value === null) return []
+  return categories.value.filter(c => c.id === addScopeCategoryId.value)
+})
+
+const openAddModal = (categoryId?: number | null) => {
   addForm.title = ''
   addForm.content = ''
   addForm.subcategoryId = null
+  // 从分类组的「新增待办」按钮进入：锁定归属分类为本分类；未分类组则锁定为不归属
+  addScopeCategoryId.value = categoryId
+  addForm.categoryId = categoryId ?? null
   isAddModalOpen.value = true
   
   // Auto focus input
@@ -1766,7 +1793,31 @@ textarea.form-control {
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 12px;
+}
+
+/* 分类组内「新增待办」按钮（同顶部按钮样式，底色跟随分类色） */
+.group-add-todo-btn {
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   margin-left: auto;
+  white-space: nowrap;
+  height: 32px;
+  opacity: 0.85;
+  transition: all var(--transition-fast);
+}
+.group-add-todo-btn:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
 }
 
 .group-content {
