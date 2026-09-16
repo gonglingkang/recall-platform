@@ -37,7 +37,7 @@ public class OaAutoSyncListener {
             if (config == null || !Boolean.TRUE.equals(config.getAutoSync())) {
                 return;
             }
-            oaSyncService.startSync(event.userId(), event.date(), OaSyncTriggerType.AUTO);
+            oaSyncService.startSync(event.userId(), event.date(), OaSyncTriggerType.AUTO, event.date());
         } catch (Exception e) {
             // 自动同步失败不打扰用户（手动同步兜底），仅记录
             log.warn("OA 自动同步未执行或失败: userId={}, date={}, reason={}",

@@ -90,14 +90,15 @@ public class OaContentBuilder {
     }
 
     /**
-     * 构建整周填写计划。
+     * 构建填写计划。
      *
      * @param userId    用户
      * @param weekStart 平台周起始（周一）
      * @param config    OA 配置（取研发/请假项目名）
-     * @return 整周计划（仅含有内容的天）
+     * @param onlyDate  仅构建该天的计划（自动同步场景，null=整周）
+     * @return 填写计划（仅含有内容的天）
      */
-    public WeekPlan buildWeekPlan(Long userId, LocalDate weekStart, OaUserConfig config) {
+    public WeekPlan buildWeekPlan(Long userId, LocalDate weekStart, OaUserConfig config, LocalDate onlyDate) {
         LocalDate end = weekStart.plusDays(WORKDAY_COUNT - 1L);
         List<DailyReport> reports = dailyReportService.listByDateRange(userId, weekStart, end);
         Map<LocalDate, DailyReport> reportByDate = reports.stream()
@@ -111,6 +112,9 @@ public class OaContentBuilder {
         List<DayFillPlan> days = new ArrayList<>();
         for (int i = 0; i < WORKDAY_COUNT; i++) {
             LocalDate date = weekStart.plusDays(i);
+            if (onlyDate != null && !date.equals(onlyDate)) {
+                continue;
+            }
             DailyReport report = reportByDate.get(date);
             String content = report == null ? "" : buildWorkContent(itemsByReportId.getOrDefault(report.getId(), List.of()));
             DailyLeaveRecord leave = leaveByDate.get(date);

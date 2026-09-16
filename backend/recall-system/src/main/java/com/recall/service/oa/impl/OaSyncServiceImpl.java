@@ -57,7 +57,7 @@ public class OaSyncServiceImpl implements OaSyncService {
     private final OaUserLockManager oaUserLockManager;
 
     @Override
-    public OaSyncLogVO startSync(Long userId, LocalDate anyDate, OaSyncTriggerType trigger) {
+    public OaSyncLogVO startSync(Long userId, LocalDate anyDate, OaSyncTriggerType trigger, LocalDate onlyDate) {
         LocalDate weekStart = anyDate.with(DayOfWeek.MONDAY);
         // OA 工时填报有时效：仅本周与上周的协同还在待办可填，更早的周不予同步
         LocalDate thisWeek = LocalDate.now().with(DayOfWeek.MONDAY);
@@ -87,9 +87,11 @@ public class OaSyncServiceImpl implements OaSyncService {
             oaSyncLogMapper.insert(logRow);
 
             try {
-                OaContentBuilder.WeekPlan plan = oaContentBuilder.buildWeekPlan(userId, weekStart, config);
+                OaContentBuilder.WeekPlan plan = oaContentBuilder.buildWeekPlan(userId, weekStart, config, onlyDate);
                 if (plan.days().isEmpty()) {
-                    finish(logRow, OaSyncStatus.SUCCESS, "本周无日报与请假，无需同步", null);
+                    finish(logRow, OaSyncStatus.SUCCESS, "该日期无日报与请假内容，无需同步", null);
+                    // 未移交异步任务，须就地释放锁（否则后续所有同步都会 4802）
+                    oaUserLockManager.unlock(userId);
                     return toVO(logRow);
                 }
                 String password = AesCipher.decrypt(config.getPasswordCipher(), cryptoKey);

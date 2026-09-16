@@ -42,18 +42,21 @@ public class OaSyncExecutor {
     public void execute(Long logId, String baseUrl, String username, String password,
                         OaContentBuilder.WeekPlan plan, boolean headless, Runnable onDone) {
         Exception lastError = null;
+        // 同步范围标注（仅某天/整周），写入日志 step 便于用户识别
+        String scope = plan.days().size() == 1
+                ? "（仅" + plan.days().get(0).date() + "）" : "（整周）";
         try {
             for (int attempt = 1; attempt <= 2; attempt++) {
                 try {
                     if (attempt > 1) {
                         log.info("OA 同步重试: logId={}, attempt={}", logId, attempt);
-                        updateStep(logId, "重试同步");
+                        updateStep(logId, "重试同步" + scope);
                     }
                     oaPlaywrightClient.run(baseUrl, username, password, plan, headless,
-                            step -> updateStep(logId, step),
+                            step -> updateStep(logId, step + scope),
                             meta -> saveMeta(logId, meta));
-                    finish(logId, OaSyncStatus.SUCCESS, "暂存待办完成", null);
-                    log.info("OA 同步成功: logId={}", logId);
+                    finish(logId, OaSyncStatus.SUCCESS, "暂存待办完成" + scope, null);
+                    log.info("OA 同步成功: logId={}, scope={}", logId, scope);
                     return;
                 } catch (Exception e) {
                     lastError = e;

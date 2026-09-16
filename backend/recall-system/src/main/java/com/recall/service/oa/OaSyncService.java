@@ -20,14 +20,15 @@ public interface OaSyncService {
     /**
      * 触发一次同步（异步执行）。
      * <p>
-     * 校验：OA 配置完整（4801）、同周无进行中任务（4802）。
+     * 校验：OA 配置完整（4801）、同周无进行中任务（4802）、仅本周/上周（4804）。
      *
      * @param userId   用户
      * @param anyDate  该周任一日期（用于定位平台周，周一为起始）
      * @param trigger  触发方式
+     * @param onlyDate 仅同步该天的日报（自动同步场景）；null=整周重填（手动按钮兜底）
      * @return 同步日志视图（status=运行中）
      */
-    OaSyncLogVO startSync(Long userId, LocalDate anyDate, OaSyncTriggerType trigger);
+    OaSyncLogVO startSync(Long userId, LocalDate anyDate, OaSyncTriggerType trigger, LocalDate onlyDate);
 
     /**
      * 查询某周最新一条同步日志。

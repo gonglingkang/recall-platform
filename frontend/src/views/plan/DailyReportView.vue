@@ -72,33 +72,45 @@
           <div class="week-sync-area">
             <template v-if="isSyncableWeek(group)">
               <span
-                v-if="syncStates[weekKeyOf(group)]"
+                v-if="syncStates[weekKeyOf(group)] && !weekTitleHidden[weekKeyOf(group)]"
                 class="week-sync-status"
                 :class="syncStatusClass(weekKeyOf(group))"
               >
-                <template v-if="syncStates[weekKeyOf(group)].status === 'running'">
-                  {{ syncStates[weekKeyOf(group)].step || '同步中' }}...
-                </template>
-                <template v-else-if="syncStates[weekKeyOf(group)].status === 'success'">
+                <!-- 提交提醒（常驻，不随同步动作状态隐藏） -->
+                <template v-if="syncStates[weekKeyOf(group)].status === 'success'">
                   <span v-if="syncStates[weekKeyOf(group)].oaSubmitted">已在OA提交</span>
                   <span v-else-if="syncStates[weekKeyOf(group)].deadlineOverdue" class="week-sync-error">
                     已过截止 {{ formatShortTime(syncStates[weekKeyOf(group)].deadline) }}
                   </span>
                   <span
-                    v-else
-                    :class="{ 'week-sync-urgent': syncStates[weekKeyOf(group)].needSubmit }"
-                    :title="syncStates[weekKeyOf(group)].needSubmit ? '该周已结束，请尽快在 OA 提交工时' : ''"
+                    v-else-if="syncStates[weekKeyOf(group)].needSubmit"
+                    class="week-sync-urgent"
+                    title="该周已结束，请尽快在 OA 提交工时"
                   >
-                    {{ syncStates[weekKeyOf(group)].needSubmit ? '待OA提交！' : '已同步OA' }}
+                    待OA提交！
                     <template v-if="syncStates[weekKeyOf(group)].deadline">
                       截止 {{ formatShortTime(syncStates[weekKeyOf(group)].deadline) }}
                     </template>
                   </span>
                 </template>
-                <template v-else>
-                  <span class="week-sync-error" @click="handleSyncOa(group)" title="点击重试">
-                    同步失败：{{ syncStates[weekKeyOf(group)].errorMsg || '未知原因' }}，点击重试
-                  </span>
+                <!-- 同步动作状态（完成后 15 秒自动隐藏） -->
+                <template v-if="!weekActionHidden[weekKeyOf(group)]">
+                  <template v-if="syncStates[weekKeyOf(group)].status === 'running'">
+                    {{ syncStates[weekKeyOf(group)].step || '同步中' }}...
+                  </template>
+                  <template v-else-if="syncStates[weekKeyOf(group)].status === 'success'">
+                    <span>
+                      已同步OA
+                      <template v-if="!syncStates[weekKeyOf(group)].needSubmit && syncStates[weekKeyOf(group)].deadline">
+                        截止 {{ formatShortTime(syncStates[weekKeyOf(group)].deadline) }}
+                      </template>
+                    </span>
+                  </template>
+                  <template v-else>
+                    <span class="week-sync-error" @click="handleSyncOa(group)" title="点击重试">
+                      同步失败：{{ syncStates[weekKeyOf(group)].errorMsg || '未知原因' }}，点击重试
+                    </span>
+                  </template>
                 </template>
               </span>
               <button
@@ -173,6 +185,22 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                 </svg>
                 请假：{{ day.leave.leaveTypeName }} · {{ day.leave.periodName }}
+              </span>
+
+              <!-- OA 同步状态：按同步范围投影到天（保存仅当天/周同步该周所有已保存天），常驻显示 -->
+              <span
+                v-if="day.savedItems.length > 0 && isSyncableWeek(group) && daySyncStates[day.dateStr]"
+                class="day-sync-badge"
+                :class="'day-sync-' + daySyncStates[day.dateStr].status"
+                :title="daySyncTooltip(day.dateStr)"
+                @click="daySyncStates[day.dateStr].status === 'failed' && handleSyncOa(group)"
+              >
+                <span
+                  v-if="daySyncStates[day.dateStr].status === 'running'"
+                  class="week-sync-spinner"
+                  style="width: 10px; height: 10px; border-width: 1.5px;"
+                ></span>
+                {{ daySyncLabel(day.dateStr) }}
               </span>
             </div>
 
@@ -1185,6 +1213,15 @@ type SyncState = {
   deadlineOverdue?: boolean
 }
 const syncStates = reactive<Record<string, SyncState>>({})
+/** 天行独立状态：周状态按"本次同步覆盖范围"投影到各天，互不干扰 */
+const daySyncStates = reactive<Record<string, SyncState>>({})
+/** 同步状态展示过的天（投影时写入，持续常驻显示） */
+const syncShownDates = reactive<Record<string, boolean>>({})
+/** 周标题栏整体隐藏（保存触发的同步只在天行展示，避免重复） */
+const weekTitleHidden = reactive<Record<string, boolean>>({})
+/** 周标题栏"同步动作状态"隐藏标记：完成（成功/失败）15 秒后隐藏，提交提醒不受影响 */
+const weekActionHidden = reactive<Record<string, boolean>>({})
+const weekActionHideTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const syncTimers = new Map<string, ReturnType<typeof setInterval>>()
 
 /** 取某周组的周一日期（后端按平台周归一，需传周一） */
@@ -1224,14 +1261,96 @@ const formatShortTime = (deadline?: string) => {
   return `${mm}-${dd} ${hh}:${mi}`
 }
 
+/** 按日期串算所在周的周一（保存日报后定位该周同步状态用） */
+const mondayOfDateStr = (dateStr: string) => {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  const dow = dt.getDay() === 0 ? 7 : dt.getDay()
+  dt.setDate(dt.getDate() - (dow - 1))
+  const yy = dt.getFullYear()
+  const mm = String(dt.getMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+/** 天行同步状态文案（去掉范围标注避免过长） */
+const daySyncLabel = (dateStr: string) => {
+  const st = daySyncStates[dateStr]
+  if (!st) return ''
+  if (st.status === 'running') {
+    return st.step ? st.step.replace(/（[^）]*）/, '') + '...' : 'OA同步中...'
+  }
+  if (st.status === 'failed') return 'OA同步失败'
+  return '已同步OA'
+}
+
+const daySyncTooltip = (dateStr: string) => {
+  const st = daySyncStates[dateStr]
+  if (!st) return ''
+  if (st.status === 'failed') return (st.errorMsg || '同步失败') + '，点击重试'
+  if (st.status === 'success') {
+    const week = syncStates[mondayOfDateStr(dateStr)]
+    if (week?.deadline && !week.oaSubmitted) {
+      return `OA 暂存成功，请在截止时间 ${formatShortTime(week.deadline)} 前于 OA 端提交`
+    }
+    return 'OA 暂存成功（最终提交请在 OA 端完成）'
+  }
+  return ''
+}
+
+/** 同步动作完成后 15 秒隐藏周标题栏动作状态（提交提醒常驻） */
+const scheduleWeekActionHide = (key: string) => {
+  const old = weekActionHideTimers.get(key)
+  if (old) clearTimeout(old)
+  weekActionHideTimers.set(key, setTimeout(() => {
+    weekActionHidden[key] = true
+    weekActionHideTimers.delete(key)
+  }, 15_000))
+}
+
+/** 解析日志 step 里的范围标注（仅YYYY-MM-DD / 整周） */
+const parseScopeDate = (step?: string | null): string | undefined => {
+  const m = step?.match(/（仅(\d{4}-\d{2}-\d{2})）/)
+  return m ? m[1] : undefined
+}
+
+/** 该周有保存日报的日期列表（投影目标） */
+const savedDatesOfWeek = (key: string) => {
+  return Object.keys(reportsMap.value).filter(d => {
+    const r = reportsMap.value[d]
+    return mondayOfDateStr(d) === key && r && r.items && r.items.length > 0
+  })
+}
+
+/** 把周状态按覆盖范围投影到天行 */
+const projectToDays = (key: string, log: OaSyncLog) => {
+  const scopeDate = parseScopeDate(log.step)
+  const targets = scopeDate ? [scopeDate] : savedDatesOfWeek(key)
+  const st: SyncState = log.status === OA_SYNC_STATUS.RUNNING
+    ? { status: 'running', step: log.step || '同步中' }
+    : log.status === OA_SYNC_STATUS.FAILED
+      ? { status: 'failed', errorMsg: log.errorMsg || '未知原因' }
+      : { status: 'success' }
+  targets.forEach(d => {
+    daySyncStates[d] = st
+    syncShownDates[d] = true
+  })
+}
+
 const applyLog = (key: string, log: OaSyncLog | null) => {
   if (!log) return
   if (log.status === OA_SYNC_STATUS.RUNNING) {
     syncStates[key] = { status: 'running', step: log.step || '同步中' }
+    weekActionHidden[key] = false
+    const old = weekActionHideTimers.get(key)
+    if (old) { clearTimeout(old); weekActionHideTimers.delete(key) }
+    projectToDays(key, log)
     return
   }
   if (log.status === OA_SYNC_STATUS.FAILED) {
     syncStates[key] = { status: 'failed', errorMsg: log.errorMsg || '未知原因' }
+    scheduleWeekActionHide(key)
+    projectToDays(key, log)
     return
   }
   // 成功：结合截止时间与 OA 提交状态生成提醒标识
@@ -1249,6 +1368,8 @@ const applyLog = (key: string, log: OaSyncLog | null) => {
     needSubmit: !oaSubmitted && now.getTime() >= nextWeekStart.getTime(),
     deadlineOverdue: !oaSubmitted && !!deadlineAt && now.getTime() > deadlineAt.getTime()
   }
+  scheduleWeekActionHide(key)
+  projectToDays(key, log)
 }
 
 /** 状态文案配色：待提交高亮为警告色 */
@@ -1261,13 +1382,21 @@ const syncStatusClass = (key: string) => {
   return st.needSubmit ? 'sync-urgent' : 'sync-success'
 }
 
-/** 轮询同步状态（2s 一次，上限 5 分钟） */
+/** 轮询同步状态（2s 一次，上限 5 分钟；自动同步日志为异步创建，前 20s 查不到时保持等待） */
 const pollStatus = (key: string) => {
   if (syncTimers.has(key)) return
   const startedAt = Date.now()
   const timer = setInterval(async () => {
     try {
       const res = await getOaSyncStatus(key)
+      if (!res.data) {
+        // 宽限：保存触发的新日志可能还没落库
+        if (Date.now() - startedAt > 20_000) {
+          clearInterval(timer!)
+          syncTimers.delete(key)
+        }
+        return
+      }
       applyLog(key, res.data)
       const stillRunning = res.data?.status === OA_SYNC_STATUS.RUNNING
       const timeout = Date.now() - startedAt > 5 * 60 * 1000
@@ -1289,6 +1418,9 @@ const pollStatus = (key: string) => {
 const handleSyncOa = async (group: WeekGroup) => {
   const key = weekKeyOf(group)
   if (syncStates[key]?.status === 'running') return
+  // 手动周同步：周标题栏恢复展示，整周投影
+  weekTitleHidden[key] = false
+  weekActionHidden[key] = false
   try {
     await triggerOaSync(key)
     syncStates[key] = { status: 'running', step: '准备同步' }
@@ -1389,6 +1521,10 @@ const saveDailyReportItems = async () => {
     }
     editorModal.isOpen = false
     refreshTrigger.value++
+    // 自动同步由后端异步触发（仅保存的那天）；周标题隐藏，状态只在天行展示
+    weekTitleHidden[mondayOfDateStr(dateStr)] = true
+    const weekKey = mondayOfDateStr(dateStr)
+    setTimeout(() => pollStatus(weekKey), 3000)
   } catch (err) {
     console.error('Failed to save daily report:', err)
     const event = new CustomEvent('app-toast', { detail: { text: '保存失败，请稍后重试。', type: 'error' } })
@@ -1600,6 +1736,35 @@ onBeforeUnmount(() => {
 }
 @keyframes week-sync-spin {
   to { transform: rotate(360deg); }
+}
+
+/* 天行 OA 同步状态徽标 */
+.day-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  cursor: default;
+}
+.day-sync-badge.day-sync-running {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+.day-sync-badge.day-sync-success {
+  color: var(--success, #16a34a);
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+.day-sync-badge.day-sync-failed {
+  color: var(--danger, #dc2626);
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  cursor: pointer;
+  text-decoration: underline dotted;
 }
 
 .week-days-list {

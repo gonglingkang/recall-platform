@@ -133,9 +133,10 @@ public class OaPlaywrightClient {
         try {
             String raw = (String) form.evaluate("""
                     () => {
+                      // 主表字段 class 为 "formmain_6019|field2044"（竖线分隔），明细行才用下划线；
                       // 字段容器内含 label（如"该周工时是否已填报"含'否'字），必须只取值区域
                       const pickVal = (field) => {
-                        const el = document.querySelector('[class*="_' + field + '"]');
+                        const el = document.querySelector('[class*="|' + field + '"], [class*="_' + field + '"]');
                         if (!el) return '';
                         const right = el.querySelector('.field__right, .field-content__view, .cap4-ctrl__browse__content');
                         return (right || el).textContent.trim();

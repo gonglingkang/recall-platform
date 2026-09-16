@@ -43,7 +43,7 @@ public class OaSyncController {
     public Result<OaSyncLogVO> trigger(@Parameter(description = "该周任一日期 YYYY-MM-DD")
                                        @PathVariable @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         Long userId = UserContextHolder.requireUserId();
-        return Result.ok(oaSyncService.startSync(userId, date, OaSyncTriggerType.MANUAL));
+        return Result.ok(oaSyncService.startSync(userId, date, OaSyncTriggerType.MANUAL, null));
     }
 
     @Operation(summary = "查询某周同步状态", description = "返回该周最新一条同步日志；从未同步返回 data=null")
