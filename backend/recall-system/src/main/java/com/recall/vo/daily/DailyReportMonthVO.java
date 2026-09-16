@@ -26,4 +26,7 @@ public class DailyReportMonthVO {
 
     @Schema(description = "当月请假记录(按日期升序,独立于日报存在,可能含未写日报的请假天)")
     private List<DailyLeaveVO> leaves;
+
+    @Schema(description = "当月考勤统计(迟到次数/请假天数/加班时长)")
+    private DailyAttendanceSummaryVO attendanceSummary;
 }

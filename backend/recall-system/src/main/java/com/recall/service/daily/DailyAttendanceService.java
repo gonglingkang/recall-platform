@@ -45,6 +45,15 @@ public interface DailyAttendanceService {
     List<LocalDate> findMissingDates(Long userId, Collection<LocalDate> dates);
 
     /**
+     * 查询指定用户某月的全部考勤记录（按日期升序）。
+     *
+     * @param userId 用户
+     * @param month  月份 YYYY-MM
+     * @return 考勤记录列表
+     */
+    List<DailyAttendanceRecord> listByMonth(Long userId, String month);
+
+    /**
      * upsert 一条考勤记录：同用户同日期存在则覆盖，不存在则建。
      *
      * @param record 考勤记录（userId/workDate 必填）

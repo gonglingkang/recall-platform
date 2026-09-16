@@ -12,6 +12,7 @@ import com.recall.entity.daily.DailyLeaveRecord;
 import com.recall.entity.daily.DailyReport;
 import com.recall.entity.daily.DailyReportItem;
 import com.recall.entity.todo.Todo;
+import com.recall.enums.LeavePeriod;
 import com.recall.service.daily.DailyAttendanceService;
 import com.recall.service.daily.DailyLeaveService;
 import com.recall.service.daily.DailyReportItemService;
@@ -19,6 +20,7 @@ import com.recall.service.daily.DailyReportItemTodoService;
 import com.recall.service.daily.DailyReportService;
 import com.recall.service.oa.event.DailyChangedEvent;
 import com.recall.service.todo.TodoService;
+import com.recall.vo.daily.DailyAttendanceSummaryVO;
 import com.recall.vo.daily.DailyAttendanceVO;
 import com.recall.vo.daily.DailyLeaveVO;
 import com.recall.vo.daily.DailyReportItemVO;
@@ -31,7 +33,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -68,12 +72,23 @@ public class DailyReportServiceImpl implements DailyReportService {
     private final TodoService todoService;
     private final ApplicationEventPublisher eventPublisher;
 
+    /** 工作日加班起算时间 18:30 */
+    private static final LocalTime OVERTIME_START = LocalTime.of(18, 30);
+    /** 休息日/节假日加班计费时段：上午 8:30-12:00、下午 13:30-17:30、晚间 18:30-次日零点 */
+    private static final LocalTime[][] OVERTIME_SEGMENTS = {
+            {LocalTime.of(8, 30), LocalTime.of(12, 0)},
+            {LocalTime.of(13, 30), LocalTime.of(17, 30)},
+            {LocalTime.of(18, 30), LocalTime.of(23, 59, 59)}
+    };
+
     // ===================== 查询 =====================
 
     @Override
     public DailyReportMonthVO monthList(String month) {
         validateMonth(month);
         Long userId = UserContextHolder.requireUserId();
+        List<DailyLeaveVO> leaves = dailyLeaveService.listByMonth(month);
+        DailyAttendanceSummaryVO summary = buildAttendanceSummary(userId, month, leaves);
         // 当月日报主表（按日期升序）
         List<DailyReport> reports = dailyReportMapper.selectList(new LambdaQueryWrapper<DailyReport>()
                 .eq(DailyReport::getUserId, userId)
@@ -84,15 +99,84 @@ public class DailyReportServiceImpl implements DailyReportService {
             return DailyReportMonthVO.builder()
                     .month(month)
                     .reports(Collections.emptyList())
-                    .leaves(dailyLeaveService.listByMonth(month))
+                    .leaves(leaves)
+                    .attendanceSummary(summary)
                     .build();
         }
         List<DailyReportVO> vos = buildReportVOs(reports);
         return DailyReportMonthVO.builder()
                 .month(month)
                 .reports(vos)
-                .leaves(dailyLeaveService.listByMonth(month))
+                .leaves(leaves)
+                .attendanceSummary(summary)
                 .build();
+    }
+
+    /**
+     * 计算当月考勤统计：迟到次数 / 请假天数(半天0.5) / 加班时长。
+     * <p>
+     * 加班规则：工作日按 18:30 后到下班卡计；休息日/节假日按
+     * 8:30-12:00、13:30-17:30、18:30-下班 三段与打卡时间的交集计，
+     * 上班卡早于段起点按段起点算（用户规则）。
+     */
+    private DailyAttendanceSummaryVO buildAttendanceSummary(Long userId, String month, List<DailyLeaveVO> leaves) {
+        List<DailyAttendanceRecord> records = dailyAttendanceService.listByMonth(userId, month);
+        int lateCount = (int) records.stream()
+                .filter(r -> r.getAttendanceStatus() != null && r.getAttendanceStatus().contains("迟到"))
+                .count();
+        double leaveDays = leaves.stream().mapToDouble(l -> {
+            LeavePeriod period = LeavePeriod.of(l.getPeriod());
+            return period == LeavePeriod.FULL_DAY ? 1.0 : period == null ? 0.0 : 0.5;
+        }).sum();
+        long overtimeMinutes = records.stream().mapToLong(this::overtimeMinutesOf).sum();
+        double overtimeHours = Math.round(overtimeMinutes / 6.0) / 10.0;
+        return DailyAttendanceSummaryVO.builder()
+                .lateCount(lateCount)
+                .leaveDays(leaveDays)
+                .overtimeHours(overtimeHours)
+                .build();
+    }
+
+    /** 单日加班分钟数；无下班卡无法计时返回 0 */
+    private long overtimeMinutesOf(DailyAttendanceRecord record) {
+        LocalTime out = parseClock(record.getClockOut());
+        if (out == null) {
+            return 0;
+        }
+        LocalTime in = parseClock(record.getClockIn());
+        boolean workday = record.getDateType() == null || "工作日".equals(record.getDateType());
+        if (workday) {
+            return Math.max(0, Duration.between(OVERTIME_START, out).toMinutes());
+        }
+        // 休息日/节假日：三段标准区间与打卡区间的交集；缺卡用段边界补
+        long minutes = 0;
+        for (LocalTime[] seg : OVERTIME_SEGMENTS) {
+            LocalTime start = in == null ? seg[0] : maxTime(in, seg[0]);
+            LocalTime end = minTime(out, seg[1]);
+            if (end.isAfter(start)) {
+                minutes += Duration.between(start, end).toMinutes();
+            }
+        }
+        return minutes;
+    }
+
+    private static LocalTime parseClock(String s) {
+        if (s == null || s.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(s.trim().length() == 5 ? s.trim() + ":00" : s.trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static LocalTime maxTime(LocalTime a, LocalTime b) {
+        return a.isAfter(b) ? a : b;
+    }
+
+    private static LocalTime minTime(LocalTime a, LocalTime b) {
+        return a.isBefore(b) ? a : b;
     }
 
     @Override

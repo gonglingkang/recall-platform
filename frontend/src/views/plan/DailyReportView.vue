@@ -8,13 +8,28 @@
           <p class="subtitle-lbl">查看并总结本月日常工作内容，按周归档排版</p>
         </div>
         
+        <!-- 当月考勤统计（标题框中间，表格形式） -->
+        <div v-if="monthSummary" class="stats-bar premium-card" style="flex-shrink: 0;">
+          <div class="stats-info">
+            <div class="stat-item">
+              <span class="stat-lbl">迟到次数</span>
+              <span class="stat-val" style="color: #dc2626;">{{ monthSummary.lateCount }}</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+              <span class="stat-lbl">请假天数</span>
+              <span class="stat-val" style="color: #2563eb;">{{ monthSummary.leaveDays }}</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+              <span class="stat-lbl">加班时长(时)</span>
+              <span class="stat-val" style="color: #d97706;">{{ monthSummary.overtimeHours }}</span>
+            </div>
+          </div>
+        </div>
+
         <!-- Right side actions -->
-        <div class="header-actions" style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-          <!-- Holiday Filters Toggle -->
-          <label class="filter-toggle-label" style="display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-main); cursor: pointer; user-select: none; font-weight: 500;">
-            <input type="checkbox" v-model="filterSettings.hideOffDays" style="width: 16px; height: 16px; cursor: pointer;" />
-            <span>隐藏周末及节假日</span>
-          </label>
+        <div class="header-actions" style="display: flex; flex-direction: column; align-items: center; gap: 10px; flex-wrap: wrap;">
 
           <!-- Month Selector / Nav -->
           <div class="month-nav" style="display: flex; align-items: center; border: 1.5px solid var(--border-medium); border-radius: var(--radius-md); background: #fff; padding: 2px; overflow: hidden; height: 42px;">
@@ -26,21 +41,21 @@
             <span style="font-size: 14.5px; font-weight: 700; color: var(--text-main); padding: 0 16px; min-width: 100px; text-align: center; user-select: none;">
               {{ selectedYear }}年{{ selectedMonthNum }}月
             </span>
-            <button 
-              class="nav-arrow-btn" 
-              @click.stop="shiftMonth(1)" 
-              title="下一个月" 
+            <button
+              class="nav-arrow-btn"
+              @click.stop="shiftMonth(1)"
+              title="下一个月"
               :disabled="selectedMonth >= currentMonthStr"
-              :style="{ 
-                border: 'none', 
-                background: 'none', 
-                width: '36px', 
-                height: '36px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                color: selectedMonth >= currentMonthStr ? 'var(--text-light)' : 'var(--text-muted)', 
-                borderRadius: '4px', 
+              :style="{
+                border: 'none',
+                background: 'none',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: selectedMonth >= currentMonthStr ? 'var(--text-light)' : 'var(--text-muted)',
+                borderRadius: '4px',
                 transition: 'all 0.2s',
                 opacity: selectedMonth >= currentMonthStr ? 0.35 : 1,
                 cursor: selectedMonth >= currentMonthStr ? 'not-allowed' : 'pointer'
@@ -51,6 +66,12 @@
               </svg>
             </button>
           </div>
+
+          <!-- Holiday Filters Toggle（月份选择器下方） -->
+          <label class="filter-toggle-label" style="display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-main); cursor: pointer; user-select: none; font-weight: 500;">
+            <input type="checkbox" v-model="filterSettings.hideOffDays" style="width: 16px; height: 16px; cursor: pointer;" />
+            <span>隐藏周末及节假日</span>
+          </label>
         </div>
       </div>
     </div>
@@ -883,6 +904,8 @@ const closeAllDropdowns = () => {
 
 const reportsMap = ref<Record<string, any>>({})
 const leavesMap = ref<Record<string, any>>({})
+/** 当月考勤统计（迟到次数/请假天数/加班时长） */
+const monthSummary = ref<{ lateCount: number; leaveDays: number; overtimeHours: number } | null>(null)
 const isLoadingReports = ref(false)
 
 const leaveModal = reactive({
@@ -1012,15 +1035,18 @@ const fetchMonthlyReports = async (monthStr: string) => {
         leaveMap[lv.leaveDate] = lv
       })
       leavesMap.value = leaveMap
+      monthSummary.value = res.data.attendanceSummary || null
       scrollToTodayWeek()
     } else {
       reportsMap.value = {}
       leavesMap.value = {}
+      monthSummary.value = null
     }
   } catch (err) {
     console.error('Failed to fetch monthly daily reports:', err)
     reportsMap.value = {}
     leavesMap.value = {}
+    monthSummary.value = null
   } finally {
     isLoadingReports.value = false
   }
@@ -1590,6 +1616,72 @@ onBeforeUnmount(() => {
   font-size: 13.5px;
   color: var(--text-muted);
   margin: 0;
+}
+
+/* 标题框中间的考勤统计表格（样式对齐 TodayView 标题统计栏） */
+.stats-bar {
+  flex: 1;
+  max-width: 460px;
+  padding: 10px 20px;
+}
+.stats-info {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.stat-val {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.stat-lbl {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.stat-divider {
+  width: 1px;
+  height: 28px;
+  background-color: var(--border-medium);
+}
+
+/* 标题框中间的考勤统计表格（样式对齐今日待办标题统计栏） */
+.stats-bar {
+  flex: 1;
+  max-width: 460px;
+  padding: 10px 20px;
+}
+.stats-info {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.stat-val {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.stat-lbl {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.stat-divider {
+  width: 1px;
+  height: 28px;
+  background-color: var(--border-medium);
 }
 
 .nav-arrow-btn:hover:not(:disabled) {

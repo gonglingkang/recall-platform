@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -53,6 +54,16 @@ public class DailyAttendanceServiceImpl implements DailyAttendanceService {
     public List<LocalDate> findMissingDates(Long userId, Collection<LocalDate> dates) {
         Map<LocalDate, DailyAttendanceRecord> existing = mapByDates(userId, dates);
         return dates.stream().filter(d -> !existing.containsKey(d)).toList();
+    }
+
+    @Override
+    public List<DailyAttendanceRecord> listByMonth(Long userId, String month) {
+        YearMonth ym = YearMonth.parse(month);
+        return dailyAttendanceRecordMapper.selectList(new LambdaQueryWrapper<DailyAttendanceRecord>()
+                .eq(DailyAttendanceRecord::getUserId, userId)
+                .ge(DailyAttendanceRecord::getWorkDate, ym.atDay(1))
+                .lt(DailyAttendanceRecord::getWorkDate, ym.plusMonths(1).atDay(1))
+                .orderByAsc(DailyAttendanceRecord::getWorkDate));
     }
 
     @Override
