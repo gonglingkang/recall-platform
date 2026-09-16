@@ -7,16 +7,19 @@ import com.recall.common.exception.BusinessException;
 import com.recall.dao.daily.DailyReportMapper;
 import com.recall.dto.daily.DailyReportItemReq;
 import com.recall.dto.daily.DailyReportSaveReq;
+import com.recall.entity.daily.DailyAttendanceRecord;
 import com.recall.entity.daily.DailyLeaveRecord;
 import com.recall.entity.daily.DailyReport;
 import com.recall.entity.daily.DailyReportItem;
 import com.recall.entity.todo.Todo;
+import com.recall.service.daily.DailyAttendanceService;
 import com.recall.service.daily.DailyLeaveService;
 import com.recall.service.daily.DailyReportItemService;
 import com.recall.service.daily.DailyReportItemTodoService;
 import com.recall.service.daily.DailyReportService;
 import com.recall.service.oa.event.DailyChangedEvent;
 import com.recall.service.todo.TodoService;
+import com.recall.vo.daily.DailyAttendanceVO;
 import com.recall.vo.daily.DailyLeaveVO;
 import com.recall.vo.daily.DailyReportItemVO;
 import com.recall.vo.daily.DailyReportMonthVO;
@@ -61,6 +64,7 @@ public class DailyReportServiceImpl implements DailyReportService {
     private final DailyReportItemService dailyReportItemService;
     private final DailyReportItemTodoService dailyReportItemTodoService;
     private final DailyLeaveService dailyLeaveService;
+    private final DailyAttendanceService dailyAttendanceService;
     private final TodoService todoService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -257,6 +261,9 @@ public class DailyReportServiceImpl implements DailyReportService {
         List<LocalDate> reportDates = reports.stream().map(DailyReport::getReportDate).toList();
         Map<LocalDate, DailyLeaveRecord> leaveByDate =
                 dailyLeaveService.mapByDates(reports.get(0).getUserId(), reportDates);
+        // 5. 一次查全部考勤打卡记录，按日期分组（OA 每日抓取，可能无记录）
+        Map<LocalDate, DailyAttendanceRecord> attendanceByDate =
+                dailyAttendanceService.mapByDates(reports.get(0).getUserId(), reportDates);
 
         List<DailyReportVO> result = new ArrayList<>(reports.size());
         for (DailyReport report : reports) {
@@ -278,16 +285,35 @@ public class DailyReportServiceImpl implements DailyReportService {
             }
             DailyLeaveRecord leave = leaveByDate.get(report.getReportDate());
             DailyLeaveVO leaveVO = leave == null ? null : dailyLeaveService.toVO(leave);
+            DailyAttendanceRecord attendance = attendanceByDate.get(report.getReportDate());
             result.add(DailyReportVO.builder()
                     .id(report.getId())
                     .reportDate(report.getReportDate())
                     .items(itemVOs)
                     .leave(leaveVO)
+                    .attendance(toAttendanceVO(attendance))
                     .createdAt(report.getCreatedAt())
                     .updatedAt(report.getUpdatedAt())
                     .build());
         }
         return result;
+    }
+
+    /**
+     * 考勤记录实体转 VO；无记录返回 null。
+     */
+    private DailyAttendanceVO toAttendanceVO(DailyAttendanceRecord record) {
+        if (record == null) {
+            return null;
+        }
+        return DailyAttendanceVO.builder()
+                .dateType(record.getDateType())
+                .clockIn(record.getClockIn())
+                .clockOut(record.getClockOut())
+                .attendanceResult(record.getAttendanceResult())
+                .attendanceStatus(record.getAttendanceStatus())
+                .onLeave(record.getOnLeave())
+                .build();
     }
 
     private RelatedTodoVO toRelatedTodoVO(Todo todo) {

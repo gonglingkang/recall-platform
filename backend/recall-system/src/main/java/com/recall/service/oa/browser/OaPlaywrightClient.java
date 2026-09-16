@@ -164,24 +164,7 @@ public class OaPlaywrightClient {
     // ===================== 登录 =====================
 
     private void login(Page page, String baseUrl, String username, String password) {
-        page.navigate(baseUrl + "/main.do");
-        page.waitForLoadState(LoadState.DOMCONTENTLOADED);
-        // 残留会话提示：同一账号已在线 → 点「注销」重新登录
-        Locator reloginTip = page.getByText("当前已登录了一个用户");
-        if (reloginTip.first().isVisible(new Locator.IsVisibleOptions().setTimeout(3_000))) {
-            page.getByText("注销", new Page.GetByTextOptions().setExact(true)).first().click();
-            log.info("OA 检测到残留登录会话，已注销重登");
-        }
-        Locator pwd = page.locator("#login_password1");
-        if (pwd.isVisible(new Locator.IsVisibleOptions().setTimeout(5_000))) {
-            page.getByRole(AriaRole.TEXTBOX, new Page.GetByRoleOptions().setName("账号/手机号"))
-                    .fill(username);
-            pwd.fill(password);
-            page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("登 录")).click();
-            page.waitForURL("**/main.do?method=main", new Page.WaitForURLOptions().setTimeout(30_000));
-        } else {
-            log.info("OA 会话有效，跳过登录表单");
-        }
+        OaBrowserSupport.login(page, baseUrl, username, password);
     }
 
     // ===================== 找协同 =====================

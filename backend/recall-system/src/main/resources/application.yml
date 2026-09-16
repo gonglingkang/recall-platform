@@ -50,6 +50,9 @@ recall:
     crypto-key: recall-platform-oa-crypto-key-please-change-0123456789
     # 是否无头运行同步浏览器；联调排查时置 false 可观察浏览器操作过程
     debug-headless: true
+    attendance:
+      # 每日考勤抓取 cron（Asia/Shanghai）：抓前一天 + 近7天缺失补抓
+      cron: 0 0 8 * * ?
 
 logging:
   level:

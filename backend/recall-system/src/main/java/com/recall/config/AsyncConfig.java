@@ -3,6 +3,7 @@ package com.recall.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.ThreadPoolExecutor;
@@ -12,10 +13,12 @@ import java.util.concurrent.ThreadPoolExecutor;
  * <p>
  * OA 同步单次约 1-3 分钟（驱动无头浏览器），不能占用请求线程；
  * 队列有界，打满时快速失败由调用方提示，避免任务堆积。
+ * 同时开启 @Scheduled 调度（OA 考勤每日抓取）。
  *
  * @author recall
  */
 @EnableAsync
+@EnableScheduling
 @Configuration
 public class AsyncConfig {
 

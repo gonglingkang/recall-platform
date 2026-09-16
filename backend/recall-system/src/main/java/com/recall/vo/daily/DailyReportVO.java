@@ -30,6 +30,9 @@ public class DailyReportVO {
     @Schema(description = "当天请假记录；无请假为 null")
     private DailyLeaveVO leave;
 
+    @Schema(description = "考勤打卡（OA每日抓取）；无记录为 null")
+    private DailyAttendanceVO attendance;
+
     @Schema(description = "创建时间")
     private LocalDateTime createdAt;
 

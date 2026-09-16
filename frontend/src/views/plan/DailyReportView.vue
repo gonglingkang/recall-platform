@@ -142,6 +142,27 @@
                 {{ day.typeLabel }}
               </span>
 
+              <!-- Attendance Badge (OA 每日抓取：上下班打卡时间，异常说明换行显示；请假天的请假信息由下方请假徽标渲染) -->
+              <span
+                v-if="day.attendance && day.attendance.dateType !== '休息日'"
+                class="attendance-badge"
+                :class="day.attendance.attendanceResult === '异常' ? 'abnormal' : 'normal'"
+                :title="`打卡时间：${day.attendance.clockIn || '未打卡'} - ${day.attendance.clockOut || '未打卡'}`"
+              >
+                <span class="attendance-time-line">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 11px; height: 11px;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {{ (day.attendance.clockIn || '未打卡').slice(0, 5) }} - {{ (day.attendance.clockOut || '未打卡').slice(0, 5) }}
+                </span>
+                <span
+                  v-if="!day.leave && day.attendance.attendanceStatus && day.attendance.attendanceStatus !== '正常出勤'"
+                  class="attendance-status-line"
+                >
+                  {{ day.attendance.attendanceStatus }}
+                </span>
+              </span>
+
               <!-- Leave Badge (悬停显示事由，自定义气泡) -->
               <span
                 v-if="day.leave"
@@ -718,6 +739,7 @@ interface DayItem {
   todos: any[]
   savedItems: DailyReportItem[]
   leave?: any
+  attendance?: any
 }
 
 // 请假类型/时段数字码与后端 LeaveType/LeavePeriod 枚举保持一致
@@ -1099,7 +1121,8 @@ const weeklyGroups = computed(() => {
       typeLabel: label,
       todos: dayTodos,
       savedItems,
-      leave: leavesMap.value[dateStr] || null
+      leave: leavesMap.value[dateStr] || null,
+      attendance: reportData?.attendance || null
     })
   }
   
@@ -1948,6 +1971,41 @@ onBeforeUnmount(() => {
   width: fit-content;
   cursor: default;
 }
+/* 考勤打卡徽标（时间一行，迟到等说明另起一行） */
+.attendance-badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.attendance-time-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.attendance-status-line {
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+.attendance-badge.normal {
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+}
+.attendance-badge.abnormal {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+}
+
 .leave-badge[data-tooltip]::before {
   content: '';
   position: absolute;

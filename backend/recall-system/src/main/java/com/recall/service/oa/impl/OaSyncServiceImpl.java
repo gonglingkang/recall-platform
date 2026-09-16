@@ -13,6 +13,7 @@ import com.recall.service.oa.OaConfigService;
 import com.recall.service.oa.OaContentBuilder;
 import com.recall.service.oa.OaSyncService;
 import com.recall.service.oa.browser.OaSyncExecutor;
+import com.recall.service.oa.browser.OaUserLockManager;
 import com.recall.vo.oa.OaSyncLogVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * OA 同步 Service 实现。
@@ -53,8 +53,8 @@ public class OaSyncServiceImpl implements OaSyncService {
     @Value("${recall.oa.debug-headless:true}")
     private boolean headless;
 
-    /** 进程内运行中任务 key: userId:weekStart */
-    private final ConcurrentHashMap<String, Boolean> running = new ConcurrentHashMap<>();
+    /** OA 浏览器用户级互斥锁（与考勤抓取共用，防 OA 单点登录互踢） */
+    private final OaUserLockManager oaUserLockManager;
 
     @Override
     public OaSyncLogVO startSync(Long userId, LocalDate anyDate, OaSyncTriggerType trigger) {
@@ -68,44 +68,46 @@ public class OaSyncServiceImpl implements OaSyncService {
         validateConfig(config);
 
         markStaleRunning(userId, weekStart);
-        String key = userId + ":" + weekStart;
-        if (running.putIfAbsent(key, Boolean.TRUE) != null) {
+        if (!oaUserLockManager.tryLock(userId)) {
             throw new BusinessException(ResultCode.OA_SYNC_RUNNING);
         }
-        OaSyncLog runningLog = selectRunningLog(userId, weekStart);
-        if (runningLog != null) {
-            running.remove(key);
-            throw new BusinessException(ResultCode.OA_SYNC_RUNNING);
-        }
-
-        OaSyncLog logRow = new OaSyncLog();
-        logRow.setUserId(userId);
-        logRow.setWeekStart(weekStart);
-        logRow.setTriggerType(trigger.getCode());
-        logRow.setStatus(OaSyncStatus.RUNNING.getCode());
-        logRow.setStep("准备同步");
-        logRow.setStartTime(LocalDateTime.now());
-        oaSyncLogMapper.insert(logRow);
-
         try {
-            OaContentBuilder.WeekPlan plan = oaContentBuilder.buildWeekPlan(userId, weekStart, config);
-            if (plan.days().isEmpty()) {
-                finish(logRow, OaSyncStatus.SUCCESS, "本周无日报与请假，无需同步", null);
-                return toVO(logRow);
+            OaSyncLog runningLog = selectRunningLog(userId, weekStart);
+            if (runningLog != null) {
+                throw new BusinessException(ResultCode.OA_SYNC_RUNNING);
             }
-            String password = AesCipher.decrypt(config.getPasswordCipher(), cryptoKey);
-            oaSyncExecutor.execute(logRow.getId(), config.getOaBaseUrl(), config.getUsername(), password,
-                    plan, headless, () -> running.remove(key));
-            return toVO(logRow);
-        } catch (BusinessException e) {
-            running.remove(key);
-            finish(logRow, OaSyncStatus.FAILED, "准备同步", e.getMessage());
+
+            OaSyncLog logRow = new OaSyncLog();
+            logRow.setUserId(userId);
+            logRow.setWeekStart(weekStart);
+            logRow.setTriggerType(trigger.getCode());
+            logRow.setStatus(OaSyncStatus.RUNNING.getCode());
+            logRow.setStep("准备同步");
+            logRow.setStartTime(LocalDateTime.now());
+            oaSyncLogMapper.insert(logRow);
+
+            try {
+                OaContentBuilder.WeekPlan plan = oaContentBuilder.buildWeekPlan(userId, weekStart, config);
+                if (plan.days().isEmpty()) {
+                    finish(logRow, OaSyncStatus.SUCCESS, "本周无日报与请假，无需同步", null);
+                    return toVO(logRow);
+                }
+                String password = AesCipher.decrypt(config.getPasswordCipher(), cryptoKey);
+                oaSyncExecutor.execute(logRow.getId(), config.getOaBaseUrl(), config.getUsername(), password,
+                        plan, headless, () -> oaUserLockManager.unlock(userId));
+                return toVO(logRow);
+            } catch (BusinessException e) {
+                finish(logRow, OaSyncStatus.FAILED, "准备同步", e.getMessage());
+                throw e;
+            } catch (Exception e) {
+                log.error("OA 同步任务提交失败: userId={}, weekStart={}", userId, weekStart, e);
+                finish(logRow, OaSyncStatus.FAILED, "准备同步", "同步任务提交失败，请稍后重试");
+                throw new BusinessException(ResultCode.OA_SYNC_FAILED, "同步任务提交失败，请稍后重试");
+            }
+        } catch (RuntimeException e) {
+            // 未成功移交锁给异步任务时（准备阶段失败），此处释放
+            oaUserLockManager.unlock(userId);
             throw e;
-        } catch (Exception e) {
-            running.remove(key);
-            log.error("OA 同步任务提交失败: userId={}, weekStart={}", userId, weekStart, e);
-            finish(logRow, OaSyncStatus.FAILED, "准备同步", "同步任务提交失败，请稍后重试");
-            throw new BusinessException(ResultCode.OA_SYNC_FAILED, "同步任务提交失败，请稍后重试");
         }
     }
 

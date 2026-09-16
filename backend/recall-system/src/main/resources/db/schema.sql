@@ -350,3 +350,24 @@ CREATE TABLE `oa_sync_logs` (
     KEY `idx_user_week` (`user_id`, `week_start`),
     KEY `idx_user_status` (`user_id`, `status`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='OA 同步日志表';
+
+-- ---------------------------------------------------------------------
+-- 考勤打卡记录表 daily_attendance_records（每日定时从 OA 考勤打卡记录抓取前一天）
+-- 按 天存一条；clock_in/clock_out 为 OA 展示文本（HH:mm:ss），休息日为空。
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `daily_attendance_records`;
+CREATE TABLE `daily_attendance_records` (
+    `id`                BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`           BIGINT      NOT NULL COMMENT '所属用户(数据隔离)',
+    `work_date`         DATE        NOT NULL COMMENT '考勤日期',
+    `date_type`         VARCHAR(10) DEFAULT NULL COMMENT '日期类型: 工作日/休息日',
+    `clock_in`          VARCHAR(10) DEFAULT NULL COMMENT '上班打卡时间 HH:mm:ss',
+    `clock_out`         VARCHAR(10) DEFAULT NULL COMMENT '下班打卡时间 HH:mm:ss',
+    `attendance_result` VARCHAR(10) DEFAULT NULL COMMENT '考勤结果: 正常/异常',
+    `attendance_status` VARCHAR(100) DEFAULT NULL COMMENT '出勤状态: 正常出勤/迟到8分钟/缺勤7.50小时/育儿假…',
+    `on_leave`          TINYINT     DEFAULT 0 COMMENT '当天是否请假: 0否 1是',
+    `created_at`        DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`        DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_date` (`user_id`, `work_date`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='考勤打卡记录表(OA每日抓取)';

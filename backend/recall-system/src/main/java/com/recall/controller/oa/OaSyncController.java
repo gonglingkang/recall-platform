@@ -3,6 +3,7 @@ package com.recall.controller.oa;
 import com.recall.common.api.Result;
 import com.recall.common.context.UserContextHolder;
 import com.recall.enums.OaSyncTriggerType;
+import com.recall.service.oa.OaAttendanceSyncService;
 import com.recall.service.oa.OaSyncService;
 import com.recall.vo.oa.OaSyncLogVO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,6 +36,7 @@ import java.util.List;
 public class OaSyncController {
 
     private final OaSyncService oaSyncService;
+    private final OaAttendanceSyncService oaAttendanceSyncService;
 
     @Operation(summary = "手动触发同步", description = "异步执行（约1-3分钟），同周进行中返回 4802；只暂存待办不提交")
     @PostMapping("/weeks/{date}/trigger")
@@ -58,5 +60,11 @@ public class OaSyncController {
                                           @RequestParam(defaultValue = "10") int limit) {
         Long userId = UserContextHolder.requireUserId();
         return Result.ok(oaSyncService.listLogs(userId, limit));
+    }
+
+    @Operation(summary = "手动触发考勤抓取", description = "补抓近7天缺失的打卡记录（每天08:00也会自动抓取）；同步执行，人数多时耗时较长")
+    @PostMapping("/attendance/trigger")
+    public Result<Integer> triggerAttendance() {
+        return Result.ok(oaAttendanceSyncService.syncAll());
     }
 }
