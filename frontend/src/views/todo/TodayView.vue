@@ -12,18 +12,18 @@
         <div class="stats-bar premium-card">
           <div class="stats-info">
             <div class="stat-item">
-              <span class="stat-val">{{ totalTodos }}</span>
               <span class="stat-lbl">今日总数</span>
+              <span class="stat-val">{{ totalTodos }}</span>
             </div>
             <div class="stat-divider"></div>
             <div class="stat-item">
-              <span class="stat-val text-success">{{ completedTodos }}</span>
               <span class="stat-lbl">已完成</span>
+              <span class="stat-val text-success">{{ completedTodos }}</span>
             </div>
             <div class="stat-divider"></div>
             <div class="stat-item">
-              <span class="stat-val text-indigo">{{ completionRate }}%</span>
               <span class="stat-lbl">完成率</span>
+              <span class="stat-val text-indigo">{{ completionRate }}%</span>
             </div>
           </div>
         </div>
@@ -1248,7 +1248,7 @@ const saveDrawerEdit = () => {
   font-size: 11px;
   color: var(--text-muted);
   font-weight: 600;
-  margin-top: 2px;
+  margin-bottom: 2px;
 }
 .stat-divider {
   width: 1px;

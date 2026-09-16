@@ -1676,7 +1676,7 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: var(--text-muted);
   font-weight: 600;
-  margin-top: 2px;
+  margin-bottom: 2px;
 }
 .stat-divider {
   width: 1px;
