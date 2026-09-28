@@ -371,3 +371,20 @@ CREATE TABLE `daily_attendance_records` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_user_date` (`user_id`, `work_date`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='考勤打卡记录表(OA每日抓取)';
+
+-- ---------------------------------------------------------------------
+-- 法定节假日/补班配置表 holiday_configs（全局共享，无 user_id）
+-- 首次访问某年时从 timor 节假日 API 拉取缓存入库；API 失败降级内置兜底表。
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `holiday_configs`;
+CREATE TABLE `holiday_configs` (
+    `id`          BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `year`         INT         NOT NULL COMMENT '年份',
+    `holiday_date` DATE        NOT NULL COMMENT '日期',
+    `type`         TINYINT     NOT NULL COMMENT '类型: 1法定节假日 2补班日',
+    `name`         VARCHAR(50) DEFAULT NULL COMMENT '名称(如 中秋节/国庆节前补班)',
+    `created_at`   DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`   DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_year_date` (`year`, `holiday_date`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='法定节假日/补班配置表(按年缓存,来源 timor API)';

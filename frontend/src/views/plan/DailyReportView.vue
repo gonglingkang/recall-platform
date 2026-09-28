@@ -743,8 +743,9 @@ const filterSettings = reactive({
   hideOffDays: true // Defaults to hiding weekends and holidays
 })
 
-// Chinese holiday map (2025 and 2026)
-const HOLIDAYS_DB = new Set([
+// 法定节假日/补班数据：走后端 /api/holidays/{year}（timor API 按年拉取缓存），
+// 以下硬编码仅作接口失败时的兜底
+const FALLBACK_HOLIDAYS = new Set([
   // 2026
   '2026-01-01',
   '2026-01-28', '2026-01-29', '2026-01-30', '2026-01-31', '2026-02-01', '2026-02-02', '2026-02-03', '2026-02-04',
@@ -761,13 +762,43 @@ const HOLIDAYS_DB = new Set([
   '2025-10-01', '2025-10-02', '2025-10-03', '2025-10-04', '2025-10-05', '2025-10-06', '2025-10-07', '2025-10-08'
 ])
 
-// Chinese make-up workdays (2025 and 2026)
-const MAKEUPS_DB = new Set([
-  // 2026
-  '2026-01-25', '2026-02-08', '2026-04-26', '2026-05-09', '2026-09-27', '2026-10-10',
-  // 2025
-  '2025-01-26', '2025-02-08', '2025-04-27', '2025-05-10', '2025-09-28', '2025-10-11'
+const FALLBACK_MAKEUPS = new Set([
+  '2025-01-26', '2025-02-08', '2025-04-27', '2025-05-10', '2025-09-28', '2025-10-11',
+  '2026-01-25', '2026-02-08', '2026-04-26', '2026-05-09', '2026-09-20', '2026-10-10'
 ])
+
+/** 当前生效的节假日/补班数据（初始为兜底，接口成功后替换为当年真实数据） */
+const holidayDates = ref<Set<string>>(FALLBACK_HOLIDAYS)
+const makeupDates = ref<Set<string>>(FALLBACK_MAKEUPS)
+/** API 名称映射（如 2026-09-25 → 中秋节），用于日期标签展示 */
+const holidayNames = ref<Record<string, string>>({})
+
+/** 按年拉取节假日数据（失败保留兜底） */
+const fetchHolidays = async (year: string | number) => {
+  try {
+    const res = await request.get<any, ApiResult<any>>(`/api/holidays/${year}`)
+    if (res?.code === 200 && Array.isArray(res.data) && res.data.length > 0) {
+      const holidays = new Set<string>()
+      const makeups = new Set<string>()
+      const names: Record<string, string> = {}
+      res.data.forEach((item: any) => {
+        if (item.type === 1) {
+          holidays.add(item.date)
+        } else if (item.type === 2) {
+          makeups.add(item.date)
+        }
+        if (item.name && item.name !== '法定节假日' && item.name !== '补班日') {
+          names[item.date] = item.name
+        }
+      })
+      holidayDates.value = holidays
+      makeupDates.value = makeups
+      holidayNames.value = names
+    }
+  } catch {
+    // 接口失败保留兜底数据
+  }
+}
 
 interface DailyReportItem {
   id: string
@@ -816,6 +847,9 @@ const formattedMonthLabel = computed(() => {
 })
 
 const selectedYear = computed(() => selectedMonth.value.split('-')[0])
+
+// 年份变化时拉取当年节假日/补班数据（首次进入页面即拉取）
+watch(selectedYear, (y) => { fetchHolidays(y) }, { immediate: true })
 const selectedMonthNum = computed(() => parseInt(selectedMonth.value.split('-')[1]))
 
 const toChineseNumeral = (num: number): string => {
@@ -826,11 +860,13 @@ const toChineseNumeral = (num: number): string => {
 }
 
 const getDateType = (dateStr: string): { type: 'workday' | 'weekend' | 'holiday' | 'makeup', label: string } => {
-  if (MAKEUPS_DB.has(dateStr)) {
-    return { type: 'makeup', label: '补班工作日' }
+  if (makeupDates.value.has(dateStr)) {
+    const name = holidayNames.value[dateStr]
+    return { type: 'makeup', label: name ? `${name}（补班）` : '补班工作日' }
   }
-  if (HOLIDAYS_DB.has(dateStr)) {
-    return { type: 'holiday', label: '法定节假日' }
+  if (holidayDates.value.has(dateStr)) {
+    const name = holidayNames.value[dateStr]
+    return { type: 'holiday', label: name || '法定节假日' }
   }
   const day = new Date(dateStr).getDay()
   if (day === 0 || day === 6) {
