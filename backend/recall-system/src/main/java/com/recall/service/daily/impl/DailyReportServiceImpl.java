@@ -90,6 +90,7 @@ public class DailyReportServiceImpl implements DailyReportService {
         Long userId = UserContextHolder.requireUserId();
         List<DailyLeaveVO> leaves = dailyLeaveService.listByMonth(month);
         DailyAttendanceSummaryVO summary = buildAttendanceSummary(userId, month, leaves);
+        Map<String, DailyAttendanceVO> attendances = buildMonthAttendances(userId, month);
         // 当月日报主表（按日期升序）
         List<DailyReport> reports = dailyReportMapper.selectList(new LambdaQueryWrapper<DailyReport>()
                 .eq(DailyReport::getUserId, userId)
@@ -102,6 +103,7 @@ public class DailyReportServiceImpl implements DailyReportService {
                     .reports(Collections.emptyList())
                     .leaves(leaves)
                     .attendanceSummary(summary)
+                    .attendances(attendances)
                     .build();
         }
         List<DailyReportVO> vos = buildReportVOs(reports);
@@ -110,7 +112,18 @@ public class DailyReportServiceImpl implements DailyReportService {
                 .reports(vos)
                 .leaves(leaves)
                 .attendanceSummary(summary)
+                .attendances(attendances)
                 .build();
+    }
+
+    /** 当月全量考勤（key=日期），未写日报的天也有数据，供前端打卡徽标渲染 */
+    private Map<String, DailyAttendanceVO> buildMonthAttendances(Long userId, String month) {
+        List<DailyAttendanceRecord> records = dailyAttendanceService.listByMonth(userId, month);
+        Map<String, DailyAttendanceVO> result = new java.util.LinkedHashMap<>();
+        for (DailyAttendanceRecord record : records) {
+            result.put(record.getWorkDate().toString(), toAttendanceVO(record));
+        }
+        return result;
     }
 
     /** OA 出勤状态中的请假模式（如 病假4.00小时/育儿假3.50小时） */

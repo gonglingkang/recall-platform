@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 月度日报视图（v1.0）。
@@ -29,4 +30,7 @@ public class DailyReportMonthVO {
 
     @Schema(description = "当月考勤统计(迟到次数/请假天数/加班时长)")
     private DailyAttendanceSummaryVO attendanceSummary;
+
+    @Schema(description = "当月全量考勤(key=日期YYYY-MM-DD,含未写日报的天,打卡徽标渲染用)")
+    private Map<String, DailyAttendanceVO> attendances;
 }

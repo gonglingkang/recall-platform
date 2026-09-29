@@ -942,6 +942,8 @@ const reportsMap = ref<Record<string, any>>({})
 const leavesMap = ref<Record<string, any>>({})
 /** 当月考勤统计（迟到次数/请假天数/加班时长） */
 const monthSummary = ref<{ lateCount: number; leaveDays: number; overtimeHours: number } | null>(null)
+/** 当月全量考勤（key=日期YYYY-MM-DD，含未写日报的天） */
+const attendanceMap = ref<Record<string, any>>({})
 const isLoadingReports = ref(false)
 
 const leaveModal = reactive({
@@ -1072,17 +1074,20 @@ const fetchMonthlyReports = async (monthStr: string) => {
       })
       leavesMap.value = leaveMap
       monthSummary.value = res.data.attendanceSummary || null
+      attendanceMap.value = res.data.attendances || {}
       scrollToTodayWeek()
     } else {
       reportsMap.value = {}
       leavesMap.value = {}
       monthSummary.value = null
+      attendanceMap.value = {}
     }
   } catch (err) {
     console.error('Failed to fetch monthly daily reports:', err)
     reportsMap.value = {}
     leavesMap.value = {}
     monthSummary.value = null
+    attendanceMap.value = {}
   } finally {
     isLoadingReports.value = false
   }
@@ -1212,7 +1217,7 @@ const weeklyGroups = computed(() => {
       todos: dayTodos,
       savedItems,
       leave: leavesMap.value[dateStr] || null,
-      attendance: reportData?.attendance || null
+      attendance: reportData?.attendance || attendanceMap.value[dateStr] || null
     })
   }
   
