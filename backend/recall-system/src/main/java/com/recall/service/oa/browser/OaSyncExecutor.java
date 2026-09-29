@@ -1,5 +1,6 @@
 package com.recall.service.oa.browser;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.recall.dao.oa.OaSyncLogMapper;
 import com.recall.entity.oa.OaSyncLog;
 import com.recall.enums.OaSyncStatus;
@@ -58,6 +59,16 @@ public class OaSyncExecutor {
                     finish(logId, OaSyncStatus.SUCCESS, "暂存待办完成" + scope, null);
                     log.info("OA 同步成功: logId={}, scope={}", logId, scope);
                     return;
+                } catch (OaPlaywrightClient.CollabNotFoundException ce) {
+                    // 找不到协同不重试：若该周此前同步成功过（协同曾存在），判定周报已在 OA 提交，
+                    // 状态置为「已在OA提交」并停止提供同步；否则维持「协同未发起」失败
+                    if (hasSuccessLog(logId)) {
+                        finishSubmitted(logId);
+                        log.info("OA 周报判定已提交（协同已不在待办）: logId={}", logId);
+                    } else {
+                        finish(logId, OaSyncStatus.FAILED, "同步失败", ce.getMessage());
+                    }
+                    return;
                 } catch (Exception e) {
                     lastError = e;
                     log.warn("OA 同步第 {} 次尝试失败: logId={}", attempt, logId, e);
@@ -69,6 +80,31 @@ public class OaSyncExecutor {
         } finally {
             onDone.run();
         }
+    }
+
+    /** 该周是否有过成功的同步记录（logId 之外）——有则说明协同曾存在 */
+    private boolean hasSuccessLog(Long logId) {
+        OaSyncLog current = oaSyncLogMapper.selectById(logId);
+        if (current == null) {
+            return false;
+        }
+        Long count = oaSyncLogMapper.selectCount(new LambdaQueryWrapper<OaSyncLog>()
+                .eq(OaSyncLog::getUserId, current.getUserId())
+                .eq(OaSyncLog::getWeekStart, current.getWeekStart())
+                .eq(OaSyncLog::getStatus, OaSyncStatus.SUCCESS.getCode())
+                .ne(OaSyncLog::getId, logId));
+        return count != null && count > 0;
+    }
+
+    /** 周报已提交收尾：成功状态 + 已提交标记（deadline 等已有字段不受影响） */
+    private void finishSubmitted(Long logId) {
+        OaSyncLog logRow = new OaSyncLog();
+        logRow.setId(logId);
+        logRow.setStatus(OaSyncStatus.SUCCESS.getCode());
+        logRow.setStep("已在OA提交（协同已不在待办）");
+        logRow.setOaSubmitted(true);
+        logRow.setEndTime(LocalDateTime.now());
+        oaSyncLogMapper.updateById(logRow);
     }
 
     /** 持久化表单元数据（截止时间/该周是否已填报）——读到即写，与同步成败无关 */

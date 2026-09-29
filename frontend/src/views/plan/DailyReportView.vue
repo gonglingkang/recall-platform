@@ -134,7 +134,9 @@
                   </template>
                 </template>
               </span>
+              <!-- 已在OA提交 / 已过截止：隐藏同步按钮，只保留状态文案说明原因 -->
               <button
+                v-if="!syncStates[weekKeyOf(group)]?.oaSubmitted && !syncStates[weekKeyOf(group)]?.deadlineOverdue"
                 class="week-sync-btn"
                 :disabled="syncStates[weekKeyOf(group)]?.status === 'running'"
                 @click="handleSyncOa(group)"
@@ -1358,7 +1360,9 @@ const daySyncTooltip = (dateStr: string) => {
   if (st.status === 'success') {
     const week = syncStates[mondayOfDateStr(dateStr)]
     if (week?.deadline && !week.oaSubmitted) {
-      return `OA 暂存成功，请在截止时间 ${formatShortTime(week.deadline)} 前于 OA 端提交`
+      return week.deadlineOverdue
+        ? `已过 OA 截止时间 ${formatShortTime(week.deadline)}`
+        : `OA 暂存成功，请在截止时间 ${formatShortTime(week.deadline)} 前于 OA 端提交`
     }
     return 'OA 暂存成功（最终提交请在 OA 端完成）'
   }

@@ -64,6 +64,15 @@ public class OaSyncServiceImpl implements OaSyncService {
         if (!weekStart.equals(thisWeek) && !weekStart.equals(thisWeek.minusDays(7))) {
             throw new BusinessException(ResultCode.OA_SYNC_WEEK_OUT_OF_RANGE);
         }
+        // 该周已判定在 OA 提交（协同不在待办或表单标记已填报）后不再提供同步：
+        // 避免自动同步在已提交的周反复登录 OA 空跑（单点登录会互踢用户正在使用的 OA 会话）
+        if (isAlreadySubmitted(userId, weekStart)) {
+            throw new BusinessException(ResultCode.OA_SYNC_ALREADY_SUBMITTED);
+        }
+        // 已过 OA 截止时间（最近一次从表单读到的 deadline）同样不再同步
+        if (isDeadlinePassed(userId, weekStart)) {
+            throw new BusinessException(ResultCode.OA_SYNC_DEADLINE_PASSED);
+        }
         OaUserConfig config = oaConfigService.loadByUserId(userId);
         validateConfig(config);
 
@@ -147,6 +156,30 @@ public class OaSyncServiceImpl implements OaSyncService {
 
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();
+    }
+
+    /** 该周最近一条同步日志是否已标记在 OA 提交（协同不在待办判定，或表单「该周工时是否已填报」=是） */
+    private boolean isAlreadySubmitted(Long userId, LocalDate weekStart) {
+        OaSyncLog latest = oaSyncLogMapper.selectOne(new LambdaQueryWrapper<OaSyncLog>()
+                .eq(OaSyncLog::getUserId, userId)
+                .eq(OaSyncLog::getWeekStart, weekStart)
+                .orderByDesc(OaSyncLog::getId)
+                .last("LIMIT 1"));
+        return latest != null && Boolean.TRUE.equals(latest.getOaSubmitted());
+    }
+
+    /**
+     * 该周记录的 OA 截止时间是否已过。截止时间每周固定，取该周日志中最近一条带 deadline 的记录
+     * （最新一条可能是未读到表单就失败的日志，deadline 为空不代表该周没有截止时间）。
+     */
+    private boolean isDeadlinePassed(Long userId, LocalDate weekStart) {
+        OaSyncLog withDeadline = oaSyncLogMapper.selectOne(new LambdaQueryWrapper<OaSyncLog>()
+                .eq(OaSyncLog::getUserId, userId)
+                .eq(OaSyncLog::getWeekStart, weekStart)
+                .isNotNull(OaSyncLog::getDeadline)
+                .orderByDesc(OaSyncLog::getId)
+                .last("LIMIT 1"));
+        return withDeadline != null && LocalDateTime.now().isAfter(withDeadline.getDeadline());
     }
 
     private void markStaleRunning(Long userId, LocalDate weekStart) {

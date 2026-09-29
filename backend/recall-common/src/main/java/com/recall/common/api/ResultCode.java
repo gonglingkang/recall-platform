@@ -51,6 +51,8 @@ public enum ResultCode {
     OA_SYNC_RUNNING(4802, "该周正在同步中，请勿重复触发"),
     OA_SYNC_FAILED(4803, "同步到 OA 失败"),
     OA_SYNC_WEEK_OUT_OF_RANGE(4804, "只能同步本周或上周的周报（OA 工时填报有时效）"),
+    OA_SYNC_ALREADY_SUBMITTED(4805, "该周周报已在 OA 提交，无需再同步（如需重报请在 OA 端操作）"),
+    OA_SYNC_DEADLINE_PASSED(4806, "已超过 OA 工时提交截止时间，无法再同步（如需补报请在 OA 端处理）"),
 
     // --- 服务器错误 5xx ---
     INTERNAL_ERROR(500, "服务器内部错误"),

@@ -227,7 +227,7 @@ public class OaPlaywrightClient {
         }
         if (popup == null) {
             debugSnapshot(page, "find-collaboration");
-            throw new OaSyncException("本周 OA 工时日填报协同未发起，或不在待办列表内，请先在 OA 确认后重试");
+            throw new CollabNotFoundException("本周 OA 工时日填报协同未发起，或不在待办列表内，请先在 OA 确认后重试");
         }
         popup.waitForLoadState(LoadState.DOMCONTENTLOADED);
         return popup;
@@ -496,6 +496,15 @@ public class OaPlaywrightClient {
      */
     public static class OaSyncException extends RuntimeException {
         public OaSyncException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * 找不到该周的工时填报协同：可能已提交（协同进入已办），也可能尚未发起，由上层结合历史判定
+     */
+    public static class CollabNotFoundException extends OaSyncException {
+        public CollabNotFoundException(String message) {
             super(message);
         }
     }
