@@ -29,7 +29,7 @@ import java.util.Map;
 public interface DailyLeaveService {
 
     /**
-     * 保存（upsert）指定日期的请假记录：不存在则建，存在则覆盖。
+     * 保存（upsert）当前用户指定日期的请假记录：不存在则建，存在则覆盖。
      * <p>
      * 校验：date 不可为未来（4601）；请假类型/时段数字码不合法（4603）。
      *
@@ -38,6 +38,18 @@ public interface DailyLeaveService {
      * @return 保存后的请假记录视图
      */
     DailyLeaveVO save(LocalDate date, DailyLeaveSaveReq req);
+
+    /**
+     * 保存（upsert）指定用户指定日期的请假记录（显式 userId，供 OA 考勤抓取等无请求上下文场景）。
+     * <p>
+     * OA 自动入库不覆盖手动记录：调用方需自行判断该天是否已有请假。
+     *
+     * @param userId 用户
+     * @param date   请假日期
+     * @param req    保存请求
+     * @return 保存后的请假记录视图
+     */
+    DailyLeaveVO save(Long userId, LocalDate date, DailyLeaveSaveReq req);
 
     /**
      * 删除指定日期的请假记录（物理删除），不存在或越权抛 404。
@@ -62,6 +74,15 @@ public interface DailyLeaveService {
      * @return 请假记录实体；无请假返回 null
      */
     DailyLeaveRecord getByDate(LocalDate date);
+
+    /**
+     * 查询指定用户指定日期的请假记录（显式 userId，供 OA 考勤抓取等无请求上下文场景）。
+     *
+     * @param userId 用户
+     * @param date   请假日期
+     * @return 请假记录实体；无请假返回 null
+     */
+    DailyLeaveRecord getByDate(Long userId, LocalDate date);
 
     /**
      * 批量查询指定用户多天的请假记录（避免日报列表 N+1）。

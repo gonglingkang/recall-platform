@@ -50,6 +50,11 @@ public class DailyLeaveServiceImpl implements DailyLeaveService {
 
     @Override
     public DailyLeaveVO save(LocalDate date, DailyLeaveSaveReq req) {
+        return save(UserContextHolder.requireUserId(), date, req);
+    }
+
+    @Override
+    public DailyLeaveVO save(Long userId, LocalDate date, DailyLeaveSaveReq req) {
         // 1. 未来日期校验（请假不可预记未来）
         if (date.isAfter(LocalDate.now())) {
             throw new BusinessException(ResultCode.DAILY_REPORT_FUTURE_DATE);
@@ -60,7 +65,6 @@ public class DailyLeaveServiceImpl implements DailyLeaveService {
         if (type == null || period == null) {
             throw new BusinessException(ResultCode.DAILY_LEAVE_PARAM_INVALID);
         }
-        Long userId = UserContextHolder.requireUserId();
         // 3. upsert（同用户同日期唯一）
         DailyLeaveRecord record = dailyLeaveRecordMapper.selectOne(new LambdaQueryWrapper<DailyLeaveRecord>()
                 .eq(DailyLeaveRecord::getUserId, userId)
@@ -107,8 +111,13 @@ public class DailyLeaveServiceImpl implements DailyLeaveService {
 
     @Override
     public DailyLeaveRecord getByDate(LocalDate date) {
+        return getByDate(UserContextHolder.requireUserId(), date);
+    }
+
+    @Override
+    public DailyLeaveRecord getByDate(Long userId, LocalDate date) {
         return dailyLeaveRecordMapper.selectOne(new LambdaQueryWrapper<DailyLeaveRecord>()
-                .eq(DailyLeaveRecord::getUserId, UserContextHolder.requireUserId())
+                .eq(DailyLeaveRecord::getUserId, userId)
                 .eq(DailyLeaveRecord::getLeaveDate, date));
     }
 

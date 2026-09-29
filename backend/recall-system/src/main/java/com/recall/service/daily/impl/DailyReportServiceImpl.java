@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -112,22 +113,44 @@ public class DailyReportServiceImpl implements DailyReportService {
                 .build();
     }
 
+    /** OA 出勤状态中的请假模式（如 病假4.00小时/育儿假3.50小时） */
+    private static final java.util.regex.Pattern LEAVE_STATUS_PATTERN =
+            java.util.regex.Pattern.compile("(病假|年假|事假|育儿假|产假|陪产假|婚假|丧假|调休)([0-9]+(?:\\.[0-9]+)?)?小时");
+
     /**
      * 计算当月考勤统计：迟到次数 / 请假天数(半天0.5) / 加班时长。
      * <p>
      * 加班规则：工作日按 18:30 后到下班卡计；休息日/节假日按
      * 8:30-12:00、13:30-17:30、18:30-下班 三段与打卡时间的交集计，
      * 上班卡早于段起点按段起点算（用户规则）。
+     * <p>
+     * 请假口径：手动录入的请假记录 + OA 考勤状态中的请假（当天无手动记录时），
+     * 半天级别（<6 小时）算 0.5 天，全天级别（≥6 小时）算 1 天。
      */
     private DailyAttendanceSummaryVO buildAttendanceSummary(Long userId, String month, List<DailyLeaveVO> leaves) {
         List<DailyAttendanceRecord> records = dailyAttendanceService.listByMonth(userId, month);
         int lateCount = (int) records.stream()
                 .filter(r -> r.getAttendanceStatus() != null && r.getAttendanceStatus().contains("迟到"))
                 .count();
+        Set<LocalDate> manualLeaveDates = leaves.stream()
+                .map(DailyLeaveVO::getLeaveDate)
+                .collect(Collectors.toSet());
         double leaveDays = leaves.stream().mapToDouble(l -> {
             LeavePeriod period = LeavePeriod.of(l.getPeriod());
             return period == LeavePeriod.FULL_DAY ? 1.0 : period == null ? 0.0 : 0.5;
         }).sum();
+        // OA 考勤状态中的请假（手动未录的天）：半天级别算 0.5 天，全天级别算 1 天
+        for (DailyAttendanceRecord record : records) {
+            if (record.getAttendanceStatus() == null || manualLeaveDates.contains(record.getWorkDate())) {
+                continue;
+            }
+            java.util.regex.Matcher m = LEAVE_STATUS_PATTERN.matcher(record.getAttendanceStatus());
+            if (m.find()) {
+                double hours = m.group(2) != null ? Double.parseDouble(m.group(2)) : 4.0;
+                leaveDays += hours >= 6 ? 1.0 : 0.5;
+            }
+        }
+        leaveDays = Math.round(leaveDays * 100.0) / 100.0;
         long overtimeMinutes = records.stream().mapToLong(this::overtimeMinutesOf).sum();
         double overtimeHours = Math.round(overtimeMinutes / 6.0) / 10.0;
         return DailyAttendanceSummaryVO.builder()
