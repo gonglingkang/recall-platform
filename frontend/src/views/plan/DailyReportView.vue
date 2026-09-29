@@ -1406,6 +1406,12 @@ const projectToDays = (key: string, log: OaSyncLog) => {
 
 const applyLog = (key: string, log: OaSyncLog | null) => {
   if (!log) return
+  // 残留「运行中」日志兜底：开始超 10 分钟仍运行中视为进程中断，直接按失败展示（可重试）
+  if (log.status === OA_SYNC_STATUS.RUNNING && log.startTime &&
+      Date.now() - new Date(log.startTime).getTime() > 10 * 60 * 1000) {
+    syncStates[key] = { status: 'failed', errorMsg: '同步中断（超时），请重试' }
+    return
+  }
   if (log.status === OA_SYNC_STATUS.RUNNING) {
     syncStates[key] = { status: 'running', step: log.step || '同步中' }
     weekActionHidden[key] = false

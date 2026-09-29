@@ -116,6 +116,8 @@ public class OaSyncServiceImpl implements OaSyncService {
     @Override
     public OaSyncLogVO getStatus(Long userId, LocalDate anyDate) {
         LocalDate weekStart = anyDate.with(DayOfWeek.MONDAY);
+        // 读时自愈：残留「运行中」日志（进程中断等）超阈值自动置失败，避免前端永远显示同步中
+        markStaleRunning(userId, weekStart);
         OaSyncLog latest = oaSyncLogMapper.selectOne(new LambdaQueryWrapper<OaSyncLog>()
                 .eq(OaSyncLog::getUserId, userId)
                 .eq(OaSyncLog::getWeekStart, weekStart)
