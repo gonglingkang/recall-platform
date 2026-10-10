@@ -144,6 +144,30 @@ public class OaSyncServiceImpl implements OaSyncService {
                 .stream().map(this::toVO).toList();
     }
 
+    @Override
+    public OaSyncLogVO markSubmitted(Long userId, LocalDate anyDate) {
+        LocalDate weekStart = anyDate.with(DayOfWeek.MONDAY);
+        // 与同步范围一致：仅本周/上周的周栏才提供该标记入口
+        LocalDate thisWeek = LocalDate.now().with(DayOfWeek.MONDAY);
+        if (!weekStart.equals(thisWeek) && !weekStart.equals(thisWeek.minusDays(7))) {
+            throw new BusinessException(ResultCode.OA_SYNC_WEEK_OUT_OF_RANGE);
+        }
+        if (isAlreadySubmitted(userId, weekStart)) {
+            return null;
+        }
+        OaSyncLog logRow = new OaSyncLog();
+        logRow.setUserId(userId);
+        logRow.setWeekStart(weekStart);
+        logRow.setTriggerType(OaSyncTriggerType.MANUAL.getCode());
+        logRow.setStatus(OaSyncStatus.SUCCESS.getCode());
+        logRow.setOaSubmitted(true);
+        logRow.setStep("用户标记已在OA提交");
+        logRow.setStartTime(LocalDateTime.now());
+        logRow.setEndTime(LocalDateTime.now());
+        oaSyncLogMapper.insert(logRow);
+        return toVO(logRow);
+    }
+
     // ===================== 辅助 =====================
 
     private void validateConfig(OaUserConfig config) {

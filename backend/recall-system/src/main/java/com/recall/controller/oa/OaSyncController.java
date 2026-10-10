@@ -54,6 +54,14 @@ public class OaSyncController {
         return Result.ok(oaSyncService.getStatus(userId, date));
     }
 
+    @Operation(summary = "标记该周已在OA提交", description = "用户在 OA 提交周报后手动告知平台（OA 无回调无法自动感知）：写入 oaSubmitted 标记，此后该周不再提供同步；仅限本周/上周，幂等")
+    @PostMapping("/weeks/{date}/mark-submitted")
+    public Result<OaSyncLogVO> markSubmitted(@Parameter(description = "该周任一日期 YYYY-MM-DD")
+                                             @PathVariable @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
+        Long userId = UserContextHolder.requireUserId();
+        return Result.ok(oaSyncService.markSubmitted(userId, date));
+    }
+
     @Operation(summary = "最近同步日志", description = "按开始时间倒序，默认10条")
     @GetMapping("/logs")
     public Result<List<OaSyncLogVO>> logs(@Parameter(description = "条数")

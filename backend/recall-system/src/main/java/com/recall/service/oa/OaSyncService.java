@@ -47,4 +47,17 @@ public interface OaSyncService {
      * @return 日志列表
      */
     List<OaSyncLogVO> listLogs(Long userId, int limit);
+
+    /**
+     * 用户手动标记该周周报已在 OA 提交（OA 系统无回调，平台无法自动感知最终提交，
+     * 由用户在 OA 提交后回平台告知；下一次同步的被动发现仍保留兜底）。
+     * <p>
+     * 写入一条 status=SUCCESS + oaSubmitted=true 的日志，复用已提交判定链：
+     * 此后 startSync 抛 4805、前端隐藏同步按钮。仅限本周/上周（与同步范围一致），幂等。
+     *
+     * @param userId  用户
+     * @param anyDate 该周任一日期
+     * @return 新写入的日志视图；该周此前已标记过返回 null
+     */
+    OaSyncLogVO markSubmitted(Long userId, LocalDate anyDate);
 }

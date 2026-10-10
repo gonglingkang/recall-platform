@@ -152,6 +152,14 @@
                 <span v-else class="week-sync-spinner"></span>
                 同步OA
               </button>
+              <!-- 用户在 OA 提交后手动告知平台：标记后该周不再同步 -->
+              <button
+                v-if="!syncStates[weekKeyOf(group)]?.oaSubmitted"
+                class="week-mark-btn"
+                :disabled="syncStates[weekKeyOf(group)]?.status === 'running'"
+                title="如果你已在 OA 系统提交该周周报，点击标记；标记后平台不再提供该周同步"
+                @click="openMarkSubmitted(group)"
+              >已在OA提交？标记</button>
             </template>
           </div>
         </div>
@@ -689,6 +697,28 @@
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px;">
           <button class="btn btn-secondary" @click="confirmModal.isOpen = false">取消</button>
           <button class="btn btn-primary" style="background-color: #ef4444; border-color: #ef4444;" @click="clearDailyReport">确认清除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 标记已在 OA 提交确认 -->
+    <div v-if="markSubmittedModal.isOpen" class="modal-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 2100;">
+      <div class="modal-content" style="max-width: 420px; padding: 24px; display: flex; flex-direction: column; gap: 16px; border-radius: var(--radius-lg); background: #fff; box-shadow: var(--shadow-xl); border: 1px solid var(--border-light);">
+        <div style="display: flex; align-items: center; gap: 12px; color: var(--primary);">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 24px; height: 24px;">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3 style="margin: 0; font-size: 16px; font-weight: 800; color: var(--text-main);">标记已在 OA 提交</h3>
+        </div>
+
+        <p style="font-size: 13.5px; color: var(--text-muted); margin: 0; line-height: 1.6;">
+          确认你已在 OA 系统提交该周周报？标记后平台将<strong>不再提供该周的 OA 同步</strong>。
+          <br />若后续在 OA 撤回重报，请直接在 OA 端修改（平台不会恢复同步入口）。
+        </p>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px;">
+          <button class="btn btn-secondary" @click="markSubmittedModal.isOpen = false">取消</button>
+          <button class="btn btn-primary" @click="confirmMarkSubmitted">确认标记</button>
         </div>
       </div>
     </div>
@@ -1459,6 +1489,27 @@ const handleSyncOa = async (group: WeekGroup) => {
   }
 }
 
+// ===================== 手动标记已在 OA 提交 =====================
+const markSubmittedModal = reactive({ isOpen: false, weekKey: '' })
+
+const openMarkSubmitted = (group: WeekGroup) => {
+  markSubmittedModal.weekKey = weekKeyOf(group)
+  markSubmittedModal.isOpen = true
+}
+
+const confirmMarkSubmitted = async () => {
+  const key = markSubmittedModal.weekKey
+  try {
+    const res = await request.post(`/api/oa-sync/weeks/${key}/mark-submitted`)
+    if (res.data) applyLog(key, res.data)
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: { text: '已标记该周周报在 OA 提交', type: 'success' } }))
+  } catch {
+    // 错误提示已由 request 拦截器统一 toast
+  } finally {
+    markSubmittedModal.isOpen = false
+  }
+}
+
 // 月度数据加载后，初始化各周已有的同步状态（页面刷新后恢复展示）
 watch(weeklyGroups, (groups) => {
   groups.forEach(async (group) => {
@@ -1816,6 +1867,29 @@ onBeforeUnmount(() => {
 .week-sync-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+/* 手动标记已在 OA 提交（次要文字操作） */
+.week-mark-btn {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.week-mark-btn:hover:not(:disabled) {
+  color: var(--primary);
+}
+.week-mark-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 
 .week-sync-spinner {
