@@ -27,7 +27,8 @@ import java.util.List;
  * OA 考勤打卡记录定时抓取服务。
  * <p>
  * OA 打卡数据非实时（第二天才完整），每天早上抓取前一天；
- * 扫描范围为当月 1 日 ~ 昨天（月初自动重扫整月，缺口自然补齐）。
+ * 扫描范围为最近 31 天（滚动窗口跨月：月初自动补扫上月缺口，
+ * 修复旧「当月1日~昨天」范围导致每月最后一天永远漏抓的缝隙）。
  * 休息日不入库（补班日 OA 会产生打卡记录，自然保留）。
  * 全部用户串行处理，每个用户抓取前抢 {@link OaUserLockManager} 锁
  * （与工时同步互斥，防 OA 单点登录互踢）。
@@ -82,8 +83,9 @@ public class OaAttendanceSyncService {
     }
 
     /**
-     * 抓取单个用户当月（1日~昨天）缺失的考勤记录。
+     * 抓取单个用户最近 31 天（不含今天）缺失的考勤记录。
      * <p>
+     * 滚动窗口跨月：月初时上月整月仍在窗口内，缺口（含上月最后一天）自然补齐。
      * 休息日不入库（补班日 OA 会产生打卡记录，自然保留）。
      *
      * @return true=有抓取动作（打开过浏览器）
@@ -91,8 +93,8 @@ public class OaAttendanceSyncService {
     public boolean syncUser(OaUserConfig config) {
         Long userId = config.getUserId();
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
-        // 候选范围：当月 1 日 ~ 昨天（每月初自动重扫整月，缺口自然补齐）
-        List<LocalDate> candidates = today.withDayOfMonth(1).datesUntil(today).toList();
+        // 候选范围：最近 31 天（不含今天，今天数据未生成完）；只有平台缺记录的日期才会真正抓取
+        List<LocalDate> candidates = today.minusDays(31).datesUntil(today).toList();
         List<LocalDate> missing = dailyAttendanceService.findMissingDates(userId, candidates);
         if (!oaUserLockManager.tryLock(userId)) {
             log.info("OA 考勤抓取跳过（浏览器被其他任务占用）: userId={}", userId);
