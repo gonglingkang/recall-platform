@@ -77,6 +77,15 @@ public interface ObjectiveService {
     void delete(Long id);
 
     /**
+     * 清空某月全部目标及其关键成果（绩效目标导入覆盖场景专用）。
+     * <p>与 {@link #delete(Long)} 不同，不受「存在已完成K不可删除」保护限制——
+     * 该保护仅约束常规单目标删除入口；本方法供覆盖导入使用，调用方须已向用户确认。
+     *
+     * @param month 月份，格式 yyyy-MM
+     */
+    void clearMonth(String month);
+
+    /**
      * 按 id 查询目标实体（供 Service 间内部调用，禁止透传至 Controller/前端）。
      *
      * @param id            目标 ID

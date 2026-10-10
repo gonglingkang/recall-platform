@@ -40,6 +40,14 @@
             <span>生成绩效面谈</span>
           </button>
 
+          <!-- Import Performance Button -->
+          <button class="export-data-btn" @click="openImportModal" title="粘贴公司绩效表内容，解析确认后批量导入本月目标">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="btn-icon">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+            </svg>
+            <span>导入绩效</span>
+          </button>
+
           <!-- New Objective Button -->
           <button class="add-objective-btn" @click="openCatModal(null)">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="btn-icon">
@@ -699,6 +707,77 @@
       </div>
     </div>
 
+    <!-- Import Performance Modal（粘贴公司绩效表 → LLM 解析预览 → 确认导入） -->
+    <div v-if="isImportModalOpen" class="modal-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (isImportModalOpen = false)">
+      <div class="modal-content" @click.stop style="max-width: 720px; padding: 24px; display: flex; flex-direction: column; max-height: 85vh; gap: 10px;">
+        <div class="modal-header-with-close" style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+          <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: var(--text-main);">导入绩效目标（{{ formattedMonthLabel }}）</h3>
+          <button class="modal-close-icon-btn" @click="isImportModalOpen = false" title="关闭弹窗" style="background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 18px; height: 18px;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <template v-if="importStep === 'input'">
+          <p style="font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5;">
+            从公司绩效表格中选中你的行并复制，粘贴到下方文本框（含 维度 / 目标O / 关键成果 / 权重），解析确认后批量创建本月目标：
+          </p>
+          <textarea
+            v-model="importText"
+            rows="12"
+            class="form-control"
+            placeholder="在此粘贴绩效表内容…&#10;示例：常规指标（员工）70%　天宫建模开发　1、事件建模改造后端开发 …　50%"
+            style="width: 100%; font-size: 12px; line-height: 1.6; padding: 10px 12px; background-color: #fff; border: 1.5px solid var(--border-medium); border-radius: 8px; resize: vertical; color: var(--text-main); font-family: inherit;"
+          ></textarea>
+          <div style="display: flex; justify-content: flex-end; flex-shrink: 0;">
+            <button class="btn btn-primary" :disabled="importParsing || !importText.trim()" @click="parseImportText" style="height: 32px; display: flex; align-items: center; gap: 4px;">
+              <span>{{ importParsing ? '解析中…' : '解析预览' }}</span>
+            </button>
+          </div>
+        </template>
+
+        <template v-else>
+          <p style="font-size: 13px; color: var(--text-muted); margin: 0; flex-shrink: 0;">
+            已解析出 {{ importPreview.length }} 个目标，可编辑名称与关键成果、取消勾选不需要的项，确认后导入：
+          </p>
+          <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 6px; flex-grow: 1; margin-bottom: 8px;">
+            <div v-for="(it, idx) in importPreview" :key="idx" style="border: 1.5px solid var(--border-light); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background-color: #fff;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" v-model="it.checked" style="width: 15px; height: 15px; cursor: pointer; flex-shrink: 0;" />
+                <input v-model="it.name" class="form-control" style="flex: 1; height: 30px; font-size: 13px; font-weight: 600; padding: 4px 8px;" title="目标名称（可编辑）" />
+                <span v-if="it.weight" style="flex-shrink: 0; font-size: 11px; color: var(--primary); background-color: #eef2ff; padding: 2px 8px; border-radius: 10px; font-weight: 600;">权重 {{ it.weight }}</span>
+              </div>
+              <div v-if="it.dimension" style="font-size: 11px; color: var(--text-muted); padding-left: 23px;">维度：{{ it.dimension }}（将写入目标描述）</div>
+              <div style="display: flex; flex-direction: column; gap: 4px; padding-left: 23px;">
+                <div v-for="(kr, ki) in it.keyResults" :key="ki" style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 12px; color: var(--text-muted); min-width: 16px; flex-shrink: 0;">{{ ki + 1 }}.</span>
+                  <input v-model="it.keyResults[ki]" class="form-control" style="flex: 1; height: 28px; font-size: 12px; padding: 3px 8px;" :style="kr.length > 100 ? 'border-color: #dc2626;' : ''" :title="kr.length > 100 ? '超过100字符，需精简后才能导入' : '关键成果（可编辑）'" />
+                  <button @click="it.keyResults.splice(ki, 1)" title="移除该条" style="background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 15px; line-height: 1; padding: 2px 4px; flex-shrink: 0;">×</button>
+                </div>
+              </div>
+              <div v-if="it.keyResults.length === 0" style="font-size: 12px; color: var(--text-muted); padding-left: 23px;">该目标暂无关键成果，将只创建目标 O，后续可手动添加</div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--border-light); padding-top: 10px; flex-shrink: 0;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-main); cursor: pointer;">
+              <input type="checkbox" v-model="importReplace" style="width: 15px; height: 15px; cursor: pointer;" />
+              覆盖该月已有目标（先清空再导入）
+            </label>
+            <span v-if="importReplace && performanceCategories.length > 0" style="font-size: 12px; color: #dc2626;">
+              注意：该月已有 {{ performanceCategories.length }} 个目标，覆盖将全部清空（含已完成记录），不可恢复
+            </span>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+              <button class="btn btn-secondary" :disabled="importSubmitting" @click="importStep = 'input'" style="height: 32px;">上一步</button>
+              <button class="btn btn-primary" :disabled="importSubmitting" @click="submitImport" style="height: 32px; display: flex; align-items: center; gap: 4px;">
+                <span>{{ importSubmitting ? '导入中…' : `导入 ${checkedImportCount} 个目标` }}</span>
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
     <!-- 3. Performance Category Management Drawer (PRD 6.8.1 / Issue 3) -->
     <transition name="drawer-slide">
       <div v-if="isPerfCatDrawerOpen" class="drawer-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (isPerfCatDrawerOpen = false)">
@@ -955,6 +1034,105 @@ const generatePerformanceReview = async () => {
     reviewLoading.value = false
   }
 }
+// ===================== 绩效目标导入 =====================
+const isImportModalOpen = ref(false)
+const importStep = ref<'input' | 'preview'>('input')
+const importText = ref('')
+const importParsing = ref(false)
+const importSubmitting = ref(false)
+const importReplace = ref(false)
+interface ImportPreviewItem {
+  name: string
+  dimension: string
+  weight: string
+  keyResults: string[]
+  checked: boolean
+}
+const importPreview = ref<ImportPreviewItem[]>([])
+const checkedImportCount = computed(() => importPreview.value.filter(it => it.checked).length)
+
+const emitToastMsg = (text: string, type?: string) => {
+  window.dispatchEvent(new CustomEvent('app-toast', { detail: type ? { text, type } : { text } }))
+}
+
+const openImportModal = () => {
+  importStep.value = 'input'
+  importText.value = ''
+  importPreview.value = []
+  importReplace.value = false
+  isImportModalOpen.value = true
+}
+
+const parseImportText = async () => {
+  if (importParsing.value || !importText.value.trim()) return
+  importParsing.value = true
+  try {
+    const res = await request.post('/api/objectives/import/parse', { text: importText.value }, { timeout: 120000 })
+    const items = res.data as { name: string; dimension?: string; weight?: string; keyResults: string[] }[]
+    if (!items || items.length === 0) {
+      emitToastMsg('未解析出绩效目标，请检查粘贴内容', 'error')
+      return
+    }
+    importPreview.value = items.map(it => ({
+      name: it.name,
+      dimension: it.dimension || '',
+      weight: it.weight || '',
+      keyResults: [...it.keyResults],
+      checked: true
+    }))
+    importReplace.value = false
+    importStep.value = 'preview'
+  } catch {
+    // 错误提示已由 request 拦截器统一 toast
+  } finally {
+    importParsing.value = false
+  }
+}
+
+const submitImport = async () => {
+  if (importSubmitting.value) return
+  const chosen = importPreview.value.filter(it => it.checked)
+  if (chosen.length === 0) {
+    emitToastMsg('请至少勾选一个要导入的目标', 'error')
+    return
+  }
+  const payload: { name: string; dimension?: string; weight?: string; keyResults: string[] }[] = []
+  for (const it of chosen) {
+    if (!it.name.trim()) {
+      emitToastMsg('存在未命名目标，请填写目标名称', 'error')
+      return
+    }
+    const krs = it.keyResults.map(k => k.trim()).filter(Boolean)
+    const over = krs.find(k => k.length > 100)
+    if (over) {
+      emitToastMsg(`关键成果超过100字符：${over.slice(0, 20)}…，请精简后再导入`, 'error')
+      return
+    }
+    payload.push({
+      name: it.name.trim(),
+      dimension: it.dimension || undefined,
+      weight: it.weight || undefined,
+      keyResults: krs
+    })
+  }
+  importSubmitting.value = true
+  try {
+    const res = await request.post('/api/objectives/import', {
+      month: selectedMonth.value,
+      replace: importReplace.value,
+      objectives: payload
+    }, { timeout: 60000 })
+    const data = res.data as { objectives: number; keyResults: number }
+    emitToastMsg(`成功导入 ${data.objectives} 个目标、${data.keyResults} 个关键成果`)
+    isImportModalOpen.value = false
+    await loadData(selectedMonth.value)
+  } catch {
+    // 错误提示已由 request 拦截器统一 toast（如目标同名冲突 409）
+  } finally {
+    importSubmitting.value = false
+  }
+}
+
 const checklistText = ref('')
 const checklistSections = ref([] as { title: string; text: string }[])
 

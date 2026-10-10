@@ -2,8 +2,13 @@ package com.recall.controller.objectives;
 
 import com.recall.common.api.Result;
 import com.recall.dto.objectives.ObjectiveCreateReq;
+import com.recall.dto.objectives.ObjectiveImportParseReq;
+import com.recall.dto.objectives.ObjectiveImportReq;
 import com.recall.dto.objectives.ObjectiveUpdateReq;
+import com.recall.service.objectives.ObjectiveImportService;
 import com.recall.service.objectives.ObjectiveService;
+import com.recall.vo.objectives.ObjectiveImportPreviewVO;
+import com.recall.vo.objectives.ObjectiveImportResultVO;
 import com.recall.vo.objectives.ObjectiveVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -40,6 +45,7 @@ import java.util.List;
 public class ObjectiveController {
 
     private final ObjectiveService objectiveService;
+    private final ObjectiveImportService objectiveImportService;
 
     @Operation(summary = "目标列表", description = "某月目标列表，每个O内嵌其下所有K，派生字段已算好")
     @GetMapping
@@ -74,5 +80,17 @@ public class ObjectiveController {
     public Result<Void> delete(@Parameter(description = "目标ID") @PathVariable Long id) {
         objectiveService.delete(id);
         return Result.ok();
+    }
+
+    @Operation(summary = "解析绩效表格文本", description = "LLM 把复制的绩效表内容解析为结构化预览（不写库），供导入确认编辑")
+    @PostMapping("/import/parse")
+    public Result<List<ObjectiveImportPreviewVO>> parseImport(@Valid @RequestBody ObjectiveImportParseReq req) {
+        return Result.ok(objectiveImportService.parse(req));
+    }
+
+    @Operation(summary = "批量导入绩效目标", description = "按预览结构批量创建月度目标与关键成果；replace=true 先清空该月全部已有目标（含已完成，须前端已确认）")
+    @PostMapping("/import")
+    public Result<ObjectiveImportResultVO> importObjectives(@Valid @RequestBody ObjectiveImportReq req) {
+        return Result.ok(objectiveImportService.importObjectives(req));
     }
 }

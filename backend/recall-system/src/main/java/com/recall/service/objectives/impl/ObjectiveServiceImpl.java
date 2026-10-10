@@ -192,6 +192,20 @@ public class ObjectiveServiceImpl implements ObjectiveService {
         objectiveMapper.deleteById(id);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void clearMonth(String month) {
+        // 绩效导入覆盖专用：不做已完成保护（调用方须已向用户确认），其余删除路径与 delete 一致
+        validateMonth(month);
+        List<Objective> objectives = objectiveMapper.selectList(new LambdaQueryWrapper<Objective>()
+                .eq(Objective::getUserId, UserContextHolder.requireUserId())
+                .eq(Objective::getMonth, month));
+        for (Objective o : objectives) {
+            keyResultService.deleteByObjective(o.getId());
+            objectiveMapper.deleteById(o.getId());
+        }
+    }
+
     // ===================== 派生计算 =====================
 
     /**
