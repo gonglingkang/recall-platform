@@ -67,4 +67,13 @@ public class OaSyncController {
     public Result<Integer> triggerAttendance() {
         return Result.ok(oaAttendanceSyncService.syncAll());
     }
+
+    @Operation(summary = "重新抓取指定日考勤", description = "强制从 OA 重抓该日打卡记录并覆盖平台已有数据；用于 OA 修正考勤后刷新平台侧（日报页异常考勤的重新获取按钮）")
+    @PostMapping("/attendance/{date}/refetch")
+    public Result<Void> refetchAttendance(@Parameter(description = "日期 YYYY-MM-DD")
+                                          @PathVariable @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
+        Long userId = UserContextHolder.requireUserId();
+        oaAttendanceSyncService.refetchDay(userId, date);
+        return Result.ok();
+    }
 }

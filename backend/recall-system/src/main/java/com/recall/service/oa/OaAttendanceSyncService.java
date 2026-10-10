@@ -1,6 +1,8 @@
 package com.recall.service.oa;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.recall.common.api.ResultCode;
+import com.recall.common.exception.BusinessException;
 import com.recall.common.util.AesCipher;
 import com.recall.dao.oa.OaUserConfigMapper;
 import com.recall.dto.daily.DailyLeaveSaveReq;
@@ -131,6 +133,52 @@ public class OaAttendanceSyncService {
             // 请假自动入库：解析当月考勤出勤状态（手动已录的天跳过，不覆盖）
             backfillLeavesFromAttendance(userId, today.withDayOfMonth(1), today.minusDays(1));
             return true;
+        } finally {
+            oaUserLockManager.unlock(userId);
+        }
+    }
+
+    /**
+     * 强制重抓指定日期的考勤记录（日报页异常考勤的「重新获取」入口）。
+     * <p>
+     * 与定时补抓不同：不跳过平台已有记录，抓到即覆盖 upsert（用于 OA 修正考勤后刷新平台侧）。
+     *
+     * @return 更新后的考勤记录
+     */
+    public DailyAttendanceRecord refetchDay(Long userId, LocalDate date) {
+        OaUserConfig config = oaUserConfigMapper.selectOne(new LambdaQueryWrapper<OaUserConfig>()
+                .eq(OaUserConfig::getUserId, userId));
+        if (config == null || config.getUsername() == null || config.getUsername().isBlank()) {
+            throw new BusinessException(ResultCode.PARAM_VALIDATE_FAILED, "尚未配置 OA 对接，请先在系统设置中维护");
+        }
+        if (!oaUserLockManager.tryLock(userId)) {
+            throw new BusinessException(ResultCode.OA_SYNC_RUNNING);
+        }
+        try {
+            String password = AesCipher.decrypt(config.getPasswordCipher(), cryptoKey);
+            var rows = oaAttendanceClient.fetchDays(config.getOaBaseUrl(), config.getUsername(),
+                    password, List.of(date), headless);
+            OaAttendanceClient.AttendanceRow r = rows.get(date);
+            if (r == null) {
+                throw new BusinessException(ResultCode.OA_SYNC_FAILED, "OA 暂无该日考勤数据，请稍后再试");
+            }
+            if ("休息日".equals(r.dateType()) && (r.clockIn() == null || r.clockIn().isBlank())) {
+                throw new BusinessException(ResultCode.OA_SYNC_FAILED, "OA 该日为休息日且无打卡记录，无需入库");
+            }
+            DailyAttendanceRecord record = new DailyAttendanceRecord();
+            record.setUserId(userId);
+            record.setWorkDate(r.workDate());
+            record.setDateType(emptyToNull(r.dateType()));
+            record.setClockIn(emptyToNull(r.clockIn()));
+            record.setClockOut(emptyToNull(r.clockOut()));
+            record.setAttendanceResult(emptyToNull(r.attendanceResult()));
+            record.setAttendanceStatus(emptyToNull(r.attendanceStatus()));
+            record.setOnLeave(r.onLeave());
+            dailyAttendanceService.upsert(record);
+            log.info("OA 考勤强制重抓入库: userId={}, date={}, in={}, status={}",
+                    userId, date, r.clockIn(), r.attendanceStatus());
+            backfillLeavesFromAttendance(userId, date, date);
+            return record;
         } finally {
             oaUserLockManager.unlock(userId);
         }

@@ -198,6 +198,21 @@
                 </span>
               </span>
 
+              <!-- 异常考勤：重新获取入口（OA 修正后单日强制重抓覆盖平台数据） -->
+              <button
+                v-if="day.attendance && day.attendance.attendanceResult === '异常'"
+                class="attendance-refetch-btn"
+                :disabled="attendanceRefetching[day.dateStr]"
+                :title="attendanceRefetching[day.dateStr] ? '正在从 OA 重新抓取该日考勤…' : '考勤异常？点击从 OA 重新抓取该日打卡记录'"
+                @click="refetchAttendance(day.dateStr)"
+              >
+                <span v-if="attendanceRefetching[day.dateStr]" class="week-sync-spinner" style="width: 10px; height: 10px; border-width: 1.5px;"></span>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 10px; height: 10px;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                {{ attendanceRefetching[day.dateStr] ? '抓取中' : '重新获取' }}
+              </button>
+
               <!-- Leave Badge (悬停显示事由，自定义气泡) -->
               <span
                 v-if="day.leave"
@@ -932,6 +947,24 @@ const monthSummary = ref<{ lateCount: number; leaveDays: number; overtimeHours: 
 const attendanceMap = ref<Record<string, any>>({})
 const isLoadingReports = ref(false)
 
+// ===================== 异常考勤单日重抓 =====================
+const attendanceRefetching = reactive<Record<string, boolean>>({})
+
+const refetchAttendance = async (dateStr: string) => {
+  if (attendanceRefetching[dateStr]) return
+  attendanceRefetching[dateStr] = true
+  try {
+    await request.post(`/api/oa-sync/attendance/${dateStr}/refetch`, {}, { timeout: 120000 })
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: { text: '该日考勤已从 OA 重新抓取', type: 'success' } }))
+    // refreshTrigger 只驱动 weeklyGroups 重算，不会重新拉数据；必须整月重拉才能拿到新考勤
+    await fetchMonthlyReports(selectedMonth.value, true)
+  } catch {
+    // 错误提示已由 request 拦截器统一 toast（如 OA 无数据/浏览器被同步占用）
+  } finally {
+    attendanceRefetching[dateStr] = false
+  }
+}
+
 const leaveModal = reactive({
   isOpen: false,
   dateStr: '',
@@ -1044,7 +1077,7 @@ const clearDailyReport = async () => {
   }
 }
 
-const fetchMonthlyReports = async (monthStr: string) => {
+const fetchMonthlyReports = async (monthStr: string, keepScroll = false) => {
   isLoadingReports.value = true
   try {
     const res = await request.get<any, ApiResult<any>>(`/api/daily-reports?month=${monthStr}`)
@@ -1061,7 +1094,7 @@ const fetchMonthlyReports = async (monthStr: string) => {
       leavesMap.value = leaveMap
       monthSummary.value = res.data.attendanceSummary || null
       attendanceMap.value = res.data.attendances || {}
-      scrollToTodayWeek()
+      if (!keepScroll) scrollToTodayWeek()
     } else {
       reportsMap.value = {}
       leavesMap.value = {}
@@ -2199,6 +2232,31 @@ onBeforeUnmount(() => {
   background-color: #fef2f2;
   border: 1px solid #fecaca;
   color: #dc2626;
+}
+
+/* 异常考勤的重新获取按钮 */
+.attendance-refetch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #dc2626;
+  background: none;
+  border: 1px dashed #fca5a5;
+  border-radius: 8px;
+  padding: 2px 7px;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.attendance-refetch-btn:hover:not(:disabled) {
+  background-color: #fef2f2;
+  border-color: #dc2626;
+}
+.attendance-refetch-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
 }
 
 .leave-badge[data-tooltip]::before {
