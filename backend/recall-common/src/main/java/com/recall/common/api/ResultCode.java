@@ -54,6 +54,11 @@ public enum ResultCode {
     OA_SYNC_ALREADY_SUBMITTED(4805, "该周周报已在 OA 提交，无需再同步（如需重报请在 OA 端操作）"),
     OA_SYNC_DEADLINE_PASSED(4806, "已超过 OA 工时提交截止时间，无法再同步（如需补报请在 OA 端处理）"),
 
+    // --- 大模型错误 49xx ---
+    LLM_CALL_FAILED(4901, "大模型服务调用失败，请稍后重试"),
+    LLM_RESPONSE_INVALID(4902, "大模型返回内容异常，请重试"),
+    LLM_MATERIAL_EMPTY(4903, "该月暂无绩效目标与日报内容，无法生成面谈内容"),
+
     // --- 服务器错误 5xx ---
     INTERNAL_ERROR(500, "服务器内部错误"),
     SERVICE_UNAVAILABLE(503, "服务暂不可用");

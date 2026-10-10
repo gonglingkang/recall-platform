@@ -53,6 +53,13 @@ recall:
     attendance:
       # 每日考勤抓取 cron（Asia/Shanghai）：抓前一天 + 近7天缺失补抓
       cron: 0 0 8 * * ?
+  llm:
+    # 绩效面谈大模型网关（Anthropic 协议，POST {base-url}/v1/messages）
+    base-url: http://192.168.3.77:13000
+    api-key: sk-LtvaZt3bwOxe11jw7j8ICvNSQJIzvVxDu5502ZoYa34zQdHA
+    model: deepseek-flash
+    # 单次调用读超时（秒）
+    timeout-seconds: 60
 
 logging:
   level:

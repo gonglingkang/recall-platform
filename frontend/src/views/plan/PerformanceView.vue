@@ -32,6 +32,14 @@
             <span>生成绩效清单</span>
           </button>
 
+          <!-- Performance Review Generate Button -->
+          <button class="export-data-btn" :disabled="reviewLoading" @click="generatePerformanceReview" title="AI 生成本月绩效面谈四部分内容">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="btn-icon">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.915l.375 1.314.375-1.314a2.25 2.25 0 011.554-1.554l1.314-.375-1.314-.375a2.25 2.25 0 01-1.554-1.554l-.375-1.314-.375 1.314a2.25 2.25 0 01-1.554 1.554l-1.314.375 1.314.375a2.25 2.25 0 011.554 1.554z" />
+            </svg>
+            <span>生成绩效面谈</span>
+          </button>
+
           <!-- New Objective Button -->
           <button class="add-objective-btn" @click="openCatModal(null)">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="btn-icon">
@@ -630,6 +638,67 @@
       </div>
     </div>
 
+    <!-- 2.5 Performance Review Modal (AI 生成四部分面谈内容，仅平台内展示可编辑，不同步 OA) -->
+    <div v-if="isReviewModalOpen" class="modal-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (isReviewModalOpen = false)">
+      <div class="modal-content" @click.stop style="max-width: 680px; padding: 24px; display: flex; flex-direction: column; max-height: 85vh; gap: 8px;">
+        <div class="modal-header-with-close" style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+          <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: var(--text-main);">生成绩效面谈（{{ formattedMonthLabel }}）</h3>
+          <button class="modal-close-icon-btn" @click="isReviewModalOpen = false" title="关闭弹窗" style="background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 18px; height: 18px;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <p style="font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5; flex-shrink: 0;">
+          已按本月绩效目标与日报内容由 AI 生成，可编辑后分段复制到 OA 面谈表：
+        </p>
+
+        <div v-if="reviewLoading" class="modal-body" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 48px 0; flex-grow: 1;">
+          <span class="review-spinner"></span>
+          <span style="font-size: 13px; color: var(--text-muted);">正在生成绩效面谈内容，约需 10~30 秒…</span>
+        </div>
+
+        <div v-else class="modal-body" style="display: flex; flex-direction: column; gap: 14px; overflow-y: auto; padding-right: 6px; flex-grow: 1; margin-bottom: 8px;">
+          <div v-for="sec in reviewSections" :key="sec.key" style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background-color: var(--primary);"></span>
+                {{ sec.title }}
+              </h4>
+              <button
+                class="btn btn-secondary"
+                @click="copyText(reviewForm[sec.key])"
+                style="padding: 2px 10px; font-size: 11px; height: 26px; display: flex; align-items: center; gap: 4px; border-color: var(--border-medium); border-radius: var(--radius-sm);"
+                :title="'复制' + sec.title + '内容'"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 12px; height: 12px;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                </svg>
+                <span>复制</span>
+              </button>
+            </div>
+            <textarea
+              v-model="reviewForm[sec.key]"
+              :rows="Math.min(Math.max((reviewForm[sec.key] || '').split('\n').length + 1, 3), 8)"
+              class="form-control"
+              style="width: 100%; font-size: 13px; line-height: 1.6; padding: 10px 12px; background-color: #fff; border: 1.5px solid var(--border-medium); border-radius: 8px; resize: vertical; color: var(--text-main);"
+            ></textarea>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-light); padding-top: 12px; flex-shrink: 0;">
+          <span style="font-size: 12px; color: var(--text-muted);">内容仅在平台内生成展示，不会同步到 OA</span>
+          <button class="btn btn-secondary" :disabled="reviewLoading" @click="generatePerformanceReview" style="display: flex; align-items: center; gap: 4px;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 13px; height: 13px;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+            <span>{{ reviewLoading ? '生成中…' : '重新生成' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 3. Performance Category Management Drawer (PRD 6.8.1 / Issue 3) -->
     <transition name="drawer-slide">
       <div v-if="isPerfCatDrawerOpen" class="drawer-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (isPerfCatDrawerOpen = false)">
@@ -840,6 +909,52 @@ const viewRModal = reactive({
 })
 
 const isChecklistModalOpen = ref(false)
+
+// ===== 绩效面谈生成（AI 生成四部分内容，仅平台内展示，不同步 OA） =====
+type ReviewSectionKey = 'highlights' | 'shortcomings' | 'deviationAnalysis' | 'nextFocus'
+const isReviewModalOpen = ref(false)
+const reviewLoading = ref(false)
+const reviewForm = reactive<Record<ReviewSectionKey, string>>({
+  highlights: '',
+  shortcomings: '',
+  deviationAnalysis: '',
+  nextFocus: '',
+})
+const reviewSections: { key: ReviewSectionKey; title: string }[] = [
+  { key: 'highlights', title: '本期工作亮点' },
+  { key: 'shortcomings', title: '本期工作不足' },
+  { key: 'deviationAnalysis', title: '偏差原因分析' },
+  { key: 'nextFocus', title: '下期工作重点或改进建议' },
+]
+
+interface PerformanceReviewContent {
+  highlights: string
+  shortcomings: string
+  deviationAnalysis: string
+  nextFocus: string
+}
+
+const generatePerformanceReview = async () => {
+  if (reviewLoading.value) return
+  const hasPrev = Object.values(reviewForm).some(v => v.trim())
+  isReviewModalOpen.value = true
+  reviewLoading.value = true
+  try {
+    const res = await request.post('/api/performance-review/generate', { month: selectedMonth.value }, { timeout: 120000 })
+    const data = res.data as PerformanceReviewContent
+    reviewForm.highlights = data.highlights
+    reviewForm.shortcomings = data.shortcomings
+    reviewForm.deviationAnalysis = data.deviationAnalysis
+    reviewForm.nextFocus = data.nextFocus
+  } catch {
+    // 错误提示已由 request 拦截器统一 toast；无历史内容时收起空弹窗
+    if (!hasPrev && !Object.values(reviewForm).some(v => v.trim())) {
+      isReviewModalOpen.value = false
+    }
+  } finally {
+    reviewLoading.value = false
+  }
+}
 const checklistText = ref('')
 const checklistSections = ref([] as { title: string; text: string }[])
 
@@ -1583,6 +1698,22 @@ const copyText = async (val: string) => {
   padding-bottom: 60px;
   color: #334155;
   font-family: var(--font-sans);
+}
+
+/* 绩效面谈生成 loading 转圈 */
+.review-spinner {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: review-spin 0.8s linear infinite;
+}
+@keyframes review-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 1. Header Styles */
