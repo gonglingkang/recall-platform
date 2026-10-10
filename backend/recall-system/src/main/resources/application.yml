@@ -60,6 +60,17 @@ recall:
     model: deepseek-flash
     # 单次调用读超时（秒）
     timeout-seconds: 60
+  jev:
+    # jev 模型（TypeSafe System One 结构化问答）开关：false 时不装配客户端，平台走上方 LLM 网关
+    enabled: true
+    api-key: sk-zk2ca6fe0e936683cf43ff15b3d8c51e1a46ab4c29e56722
+    base-url: https://api.zhizengzeng.com
+    model: jev-latest
+    # 单次 HTTP 操作超时（秒）
+    timeout-seconds: 10
+    # 重试次数与单次调用总预算（秒）
+    max-retries: 2
+    retry-budget-seconds: 30
 
 logging:
   level:

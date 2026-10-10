@@ -21,6 +21,7 @@
 
     <modules>
         <module>recall-common</module>
+        <module>recall-jev-sdk</module>
         <module>recall-system</module>
     </modules>
 
@@ -44,6 +45,11 @@
             <dependency>
                 <groupId>com.recall</groupId>
                 <artifactId>recall-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.recall</groupId>
+                <artifactId>recall-jev-sdk</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

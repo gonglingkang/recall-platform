@@ -22,6 +22,12 @@
             <artifactId>recall-common</artifactId>
         </dependency>
 
+        <!-- jev 模型 SDK（recall.jev.enabled 开关控制是否装配） -->
+        <dependency>
+            <groupId>com.recall</groupId>
+            <artifactId>recall-jev-sdk</artifactId>
+        </dependency>
+
         <!-- Spring Security：鉴权 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
