@@ -50,6 +50,15 @@ public interface SprintService {
     SprintItemVO create(SprintCreateReq req);
 
     /**
+     * 批量导入冲刺任务（粘贴编号列表解析后的标题批量创建，事务内执行）。
+     *
+     * @param month 月份，格式 yyyy-MM
+     * @param titles 任务标题列表
+     * @return 创建数量
+     */
+    int importItems(String month, List<String> titles);
+
+    /**
      * 更新冲刺项（title/note）。
      *
      * @param id  冲刺项 ID

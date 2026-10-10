@@ -24,6 +24,14 @@
             </button>
           </div>
 
+          <!-- Import Sprint Button -->
+          <button class="import-sprint-btn" @click="openImportModal" title="粘贴编号任务列表，解析确认后批量导入本月冲刺">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="btn-icon">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+            </svg>
+            <span>导入冲刺任务</span>
+          </button>
+
           <!-- New Sprint Button -->
           <button class="add-objective-btn" @click="openSprintModal(null)">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="btn-icon">
@@ -184,6 +192,52 @@
       </div>
     </div>
 
+    <!-- Sprint Import Modal（粘贴编号列表 → 规则解析预览 → 确认导入） -->
+    <div v-if="importModal.isOpen" class="modal-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (importModal.isOpen = false)">
+      <div class="modal-content" @click.stop style="max-width: 640px; width: 95%; padding: 24px; display: flex; flex-direction: column; gap: 12px; max-height: 85vh;">
+        <h3 style="margin: 0;">导入冲刺任务（{{ formattedMonthLabel }}）</h3>
+
+        <template v-if="importPreview.length === 0">
+          <p style="font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5;">
+            从需求列表/会议纪要等来源复制编号任务列表，粘贴到下方（支持 1、/1./（1）编号，自动去空去重）：
+          </p>
+          <textarea
+            v-model="importModal.text"
+            rows="10"
+            class="form-control"
+            placeholder="示例：&#10;1、天宫低码源码分离改造与业务域微服务合并开发&#10;2、血缘功能功能开发(正向血缘、逆向血缘)"
+            style="resize: vertical; font-family: inherit; line-height: 1.6;"
+          ></textarea>
+          <div style="display: flex; justify-content: flex-end;">
+            <button class="btn btn-primary" :disabled="!importModal.text.trim()" @click="parseImportText">解析预览</button>
+          </div>
+        </template>
+
+        <template v-else>
+          <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
+            已解析出 {{ importPreview.length }} 个任务，可编辑标题、取消勾选不需要的项：
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 6px; overflow-y: auto; flex-grow: 1; padding-right: 4px;">
+            <div v-for="(it, idx) in importPreview" :key="idx" style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" v-model="it.checked" style="width: 15px; height: 15px; cursor: pointer; flex-shrink: 0;" />
+              <span style="font-size: 12px; color: var(--text-muted); min-width: 18px; flex-shrink: 0;">{{ idx + 1 }}.</span>
+              <input v-model="it.title" class="form-control" style="flex: 1; height: 30px; font-size: 12.5px; padding: 3px 8px;" title="任务标题（可编辑）" />
+              <span v-if="it.exists" style="flex-shrink: 0; font-size: 11px; color: #d97706; background-color: #fef3c7; padding: 2px 8px; border-radius: 10px;">当月已存在</span>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-light); padding-top: 10px;">
+            <span v-if="importPreview.some(it => it.exists)" style="font-size: 12px; color: #d97706;">「当月已存在」的项默认不勾选，重复导入会被拒绝</span>
+            <div style="display: flex; gap: 8px; margin-left: auto;">
+              <button class="btn btn-secondary" :disabled="importSubmitting" @click="importPreview = []">上一步</button>
+              <button class="btn btn-primary" :disabled="importSubmitting || checkedImportCount === 0" @click="submitImport">
+                {{ importSubmitting ? '导入中…' : `导入 ${checkedImportCount} 个任务` }}
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
     <!-- Link Key Results Modal -->
     <div v-if="linkKRModal.isOpen" class="modal-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (linkKRModal.isOpen = false)">
       <div class="modal-content" @click.stop style="max-width: 580px; width: 95%;">
@@ -252,6 +306,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useTodoStore } from '@/stores/todo'
 import type { TeamSprint } from '@/stores/todo'
+import request from '@/api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -396,10 +451,84 @@ const saveSprint = async () => {
   }
 }
 
+// ===================== 批量导入冲刺任务 =====================
+const importModal = reactive({ isOpen: false, text: '' })
+interface SprintImportPreviewItem { title: string; checked: boolean; exists: boolean }
+const importPreview = ref<SprintImportPreviewItem[]>([])
+const importSubmitting = ref(false)
+const checkedImportCount = computed(() => importPreview.value.filter(it => it.checked).length)
+
+const emitToastMsg = (text: string, type?: string) => {
+  window.dispatchEvent(new CustomEvent('app-toast', { detail: type ? { text, type } : { text } }))
+}
+
+const openImportModal = () => {
+  importModal.text = ''
+  importPreview.value = []
+  importModal.isOpen = true
+}
+
+/** 剥行首编号（1、/1./（1）），去空行去重 */
+const parseSprintTitles = (text: string): string[] => {
+  const seen = new Set<string>()
+  const titles: string[] = []
+  for (const rawLine of text.split(/\r?\n/)) {
+    const title = rawLine.trim().replace(/^(?:[0-9]+[、.．]|[（(][0-9]+[)）])\s*/, '').trim()
+    if (!title || seen.has(title)) continue
+    seen.add(title)
+    titles.push(title)
+  }
+  return titles
+}
+
+const parseImportText = () => {
+  const titles = parseSprintTitles(importModal.text)
+  if (!titles.length) {
+    emitToastMsg('未解析出任务，请检查粘贴内容', 'error')
+    return
+  }
+  const existing = new Set(teamSprints.value.map(s => s.title))
+  importPreview.value = titles.map(t => ({ title: t, checked: !existing.has(t), exists: existing.has(t) }))
+}
+
+const submitImport = async () => {
+  if (importSubmitting.value) return
+  const chosen = importPreview.value.filter(it => it.checked && it.title.trim())
+  if (!chosen.length) {
+    emitToastMsg('请至少勾选一个要导入的任务', 'error')
+    return
+  }
+  const existing = new Set(teamSprints.value.map(s => s.title))
+  const dup = chosen.find(it => existing.has(it.title.trim()))
+  if (dup) {
+    emitToastMsg(`任务【${dup.title.trim()}】本月已存在，请取消勾选`, 'error')
+    return
+  }
+  const over = chosen.find(it => it.title.trim().length > 100)
+  if (over) {
+    emitToastMsg(`标题超过100字符：${over.title.trim().slice(0, 20)}…，请精简`, 'error')
+    return
+  }
+  importSubmitting.value = true
+  try {
+    const res = await request.post('/api/sprint/items/import', {
+      month: selectedMonth.value,
+      titles: chosen.map(it => it.title.trim())
+    })
+    emitToastMsg(`成功导入 ${res.data} 个冲刺任务`)
+    importModal.isOpen = false
+    await loadData(selectedMonth.value)
+  } catch {
+    // 错误提示已由 request 拦截器统一 toast
+  } finally {
+    importSubmitting.value = false
+  }
+}
+
 const toggleInvolved = (sprint: TeamSprint) => {
   if (!authStore.currentUser) return
   todoStore.updateTeamSprint(authStore.currentUser.userId, sprint.id, { needInvolved: !sprint.needInvolved })
-  
+
   const text = !sprint.needInvolved ? '已标记为需我介入跟进！' : '取消介入跟进'
   const event = new CustomEvent('app-toast', { detail: { text } })
   window.dispatchEvent(event)
@@ -664,6 +793,31 @@ const saveLinkKRs = async () => {
   background-color: #1d4ed8;
 }
 .add-objective-btn .btn-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* 导入冲刺任务按钮（次要样式，与主新增按钮区分） */
+.import-sprint-btn {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  padding: 0 20px;
+  height: 42px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all var(--transition-fast);
+}
+.import-sprint-btn:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+.import-sprint-btn .btn-icon {
   width: 16px;
   height: 16px;
 }

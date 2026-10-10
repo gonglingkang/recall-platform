@@ -2,6 +2,7 @@ package com.recall.controller.sprint;
 
 import com.recall.common.api.Result;
 import com.recall.dto.sprint.SprintCreateReq;
+import com.recall.dto.sprint.SprintImportReq;
 import com.recall.dto.sprint.SprintInvolvedReq;
 import com.recall.dto.sprint.SprintLinkReq;
 import com.recall.dto.sprint.SprintStatusReq;
@@ -50,6 +51,12 @@ public class SprintController {
     @PostMapping
     public Result<SprintItemVO> create(@Valid @RequestBody SprintCreateReq req) {
         return Result.ok(sprintService.create(req));
+    }
+
+    @Operation(summary = "批量导入冲刺任务", description = "粘贴编号列表解析出的标题批量创建（事务）；同月标题重复抛 409 整批回滚")
+    @PostMapping("/import")
+    public Result<Integer> importItems(@Valid @RequestBody SprintImportReq req) {
+        return Result.ok(sprintService.importItems(req.getMonth(), req.getTitles()));
     }
 
     @Operation(summary = "编辑冲刺任务", description = "可改 title/note")

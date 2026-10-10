@@ -116,6 +116,26 @@ public class SprintServiceImpl implements SprintService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int importItems(String month, List<String> titles) {
+        // 复用 create：同月标题唯一校验天然生效，任一重复 409 整批回滚
+        int count = 0;
+        for (String title : titles) {
+            if (title == null || title.isBlank()) {
+                continue;
+            }
+            SprintCreateReq req = new SprintCreateReq();
+            req.setMonth(month);
+            req.setTitle(title.trim());
+            // 导入的任务无独立描述来源，描述默认取标题
+            req.setNote(title.trim());
+            create(req);
+            count++;
+        }
+        return count;
+    }
+
+    @Override
     public SprintItemVO update(Long id, SprintUpdateReq req) {
         SprintItem item = loadOwned(id);
         // 标题变更需校验同用户同月唯一
