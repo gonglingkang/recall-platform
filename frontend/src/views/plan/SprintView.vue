@@ -241,7 +241,21 @@
     <!-- Link Key Results Modal -->
     <div v-if="linkKRModal.isOpen" class="modal-overlay" @mousedown="mousedownTarget = $event.target" @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (linkKRModal.isOpen = false)">
       <div class="modal-content" @click.stop style="max-width: 580px; width: 95%;">
-        <h3>🔗 绑定月度绩效关键成果</h3>
+        <h3 style="margin: 0;">🔗 绑定月度绩效关键成果</h3>
+
+        <div
+          v-if="krRecommendLoading"
+          style="font-size: 12.5px; color: var(--text-muted); background-color: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 8px 12px;"
+        >
+          ✨ 正在由 jev 模型分析最合适的 K…
+        </div>
+        <div
+          v-else-if="krRecommend"
+          style="font-size: 12.5px; color: #1d4ed8; background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-md); padding: 8px 12px; line-height: 1.5;"
+        >
+          🎯 AI 推荐归属：<strong>{{ krRecommend.objectiveName }} / {{ krRecommend.krName }}</strong>
+          （置信度 {{ Math.round(krRecommend.confidence * 100) }}%，已自动勾选，可调整）
+        </div>
 
         <div class="kr-selection-body" style="max-height: 320px; overflow-y: auto; padding-right: 4px;">
           <div v-if="selectableKRsGrouped.length > 0" style="display: flex; flex-direction: column; gap: 16px;">
@@ -250,13 +264,19 @@
                 🎯 目标 O: {{ group.name }}
               </h6>
               <div style="display: flex; flex-direction: column; gap: 8px; padding-left: 6px;">
-                <label v-for="kr in group.krs" :key="kr.id" style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 12.5px; color: var(--text-main); user-select: none;">
+                <label
+                  v-for="kr in group.krs"
+                  :key="kr.id"
+                  :class="{ 'kr-recommended': krRecommend && kr.id === krRecommend.krId }"
+                  style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 12.5px; color: var(--text-main); user-select: none; padding: 2px 6px; border-radius: 6px;"
+                >
                   <input type="checkbox" :value="kr.id" v-model="linkKRModal.selectedKRIds" style="margin-top: 3px;" />
                   <span>
                     <strong style="color: var(--text-muted);">[KR]</strong> {{ kr.title }}
                     <span class="kr-status-tag" :class="kr.status" style="font-size: 9.5px; padding: 1px 4px; margin-left: 4px;">
                       {{ kr.status === 'done' ? '已完成' : (kr.status === 'in_progress' ? '进行中' : '未开始') }}
                     </span>
+                    <span v-if="krRecommend && kr.id === krRecommend.krId" style="font-size: 9.5px; color: #1d4ed8; background-color: #dbeafe; padding: 1px 5px; border-radius: 8px; margin-left: 4px; font-weight: 700;">AI 推荐</span>
                   </span>
                 </label>
               </div>
@@ -632,6 +652,26 @@ const linkKRModal = reactive({
   selectedKRIds: [] as number[]
 })
 
+// --- AI 推荐关键成果（jev） ---
+const krRecommendLoading = ref(false)
+const krRecommend = ref<{ krId: number; krName: string; objectiveName: string; confidence: number } | null>(null)
+
+const recommendKr = async () => {
+  if (krRecommendLoading.value) return
+  krRecommendLoading.value = true
+  try {
+    const res = await request.get(`/api/sprint/items/${linkKRModal.sprintId}/key-results`)
+    krRecommend.value = res.data
+    if (res.data && !linkKRModal.selectedKRIds.includes(res.data.krId)) {
+      linkKRModal.selectedKRIds.push(res.data.krId)
+    }
+  } catch {
+    // 自动推荐失败不打断绑定流程：错误提示已由 request 拦截器统一 toast，用户可手动勾选
+  } finally {
+    krRecommendLoading.value = false
+  }
+}
+
 const selectableKRsGrouped = computed(() => {
   const map: Record<number, any[]> = {}
   todoStore.performanceKRs.forEach(kr => {
@@ -663,7 +703,12 @@ const openLinkKRModal = async (sprint: TeamSprint) => {
     linkKRModal.sprintId = sprint.id
     linkKRModal.sprintTitle = sprint.title
     linkKRModal.selectedKRIds = [...(sprint.keyResultIds || [])]
+    krRecommend.value = null
     linkKRModal.isOpen = true
+    // 打开即自动推荐（有可选 K 时），结果横幅展示并自动勾选
+    if (selectableKRsGrouped.value.length > 0) {
+      recommendKr()
+    }
   } catch (e) {
     console.error('Failed to load performance key results for sprint task:', e)
   }
@@ -820,6 +865,12 @@ const saveLinkKRs = async () => {
 .import-sprint-btn .btn-icon {
   width: 16px;
   height: 16px;
+}
+
+/* AI 推荐的 KR 行高亮 */
+.kr-recommended {
+  background-color: #eff6ff;
+  outline: 1px solid #bfdbfe;
 }
 
 /* 2. Monthly Total Progress Card */

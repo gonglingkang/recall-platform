@@ -5,6 +5,7 @@ import com.recall.dto.sprint.SprintInvolvedReq;
 import com.recall.dto.sprint.SprintLinkReq;
 import com.recall.dto.sprint.SprintStatusReq;
 import com.recall.dto.sprint.SprintUpdateReq;
+import com.recall.entity.sprint.SprintItem;
 import com.recall.enums.KeyResultStatus;
 import com.recall.vo.plan.MonthCompletionCountVO;
 import com.recall.vo.sprint.SprintItemVO;
@@ -104,6 +105,15 @@ public interface SprintService {
      * @param id 冲刺项 ID
      */
     void delete(Long id);
+
+    /**
+     * 按 id 查询冲刺项实体（供 Service 间内部调用，禁止透传至 Controller/前端）。
+     *
+     * @param id             冲刺项 ID
+     * @param checkOwnership 是否校验归属当前用户；为 true 时查不到或不属于当前用户均抛 404
+     * @return 冲刺项实体；checkOwnership=false 且查不到时返回 null
+     */
+    SprintItem getById(Long id, boolean checkOwnership);
 
     /**
      * 关键成果 K 状态变更后同步关联的冲刺任务状态（供 KeyResultService 调用）。

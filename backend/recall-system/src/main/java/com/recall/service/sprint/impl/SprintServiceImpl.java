@@ -288,6 +288,14 @@ public class SprintServiceImpl implements SprintService {
         return item;
     }
 
+    @Override
+    public SprintItem getById(Long id, boolean checkOwnership) {
+        if (checkOwnership) {
+            return loadOwned(id);
+        }
+        return sprintItemMapper.selectById(id);
+    }
+
     /**
      * 校验冲刺任务状态流转是否合法（严格状态机）。
      * <p>合法流转：

@@ -7,8 +7,10 @@ import com.recall.dto.sprint.SprintInvolvedReq;
 import com.recall.dto.sprint.SprintLinkReq;
 import com.recall.dto.sprint.SprintStatusReq;
 import com.recall.dto.sprint.SprintUpdateReq;
+import com.recall.service.sprint.SprintKrRecommendService;
 import com.recall.service.sprint.SprintService;
 import com.recall.vo.sprint.SprintItemVO;
+import com.recall.vo.sprint.SprintKrRecommendVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,6 +41,7 @@ import java.util.List;
 public class SprintController {
 
     private final SprintService sprintService;
+    private final SprintKrRecommendService sprintKrRecommendService;
 
     @Operation(summary = "冲刺列表", description = "可按「需我介入」过滤")
     @GetMapping
@@ -57,6 +60,12 @@ public class SprintController {
     @PostMapping("/import")
     public Result<Integer> importItems(@Valid @RequestBody SprintImportReq req) {
         return Result.ok(sprintService.importItems(req.getMonth(), req.getTitles()));
+    }
+
+    @Operation(summary = "AI 推荐关联关键成果", description = "jev 模型按任务标题/备注从当月 KR 中推荐最合适的一个（仅供参考，绑定以 PUT 为准）；需 recall.jev.enabled=true")
+    @GetMapping("/{id}/key-results")
+    public Result<SprintKrRecommendVO> recommendKr(@Parameter(description = "任务ID") @PathVariable Long id) {
+        return Result.ok(sprintKrRecommendService.recommend(id));
     }
 
     @Operation(summary = "编辑冲刺任务", description = "可改 title/note")
