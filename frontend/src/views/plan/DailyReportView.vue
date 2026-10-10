@@ -206,12 +206,12 @@
                 </span>
               </span>
 
-              <!-- 异常考勤：重新获取入口（OA 修正后单日强制重抓覆盖平台数据） -->
+              <!-- 打卡时间缺失的异常考勤才提供重抓（迟到/早退类 OA 数据本身正确，重抓无意义） -->
               <button
-                v-if="day.attendance && day.attendance.attendanceResult === '异常'"
+                v-if="day.attendance && day.attendance.attendanceResult === '异常' && !day.leave && (!day.attendance.clockIn || !day.attendance.clockOut)"
                 class="attendance-refetch-btn"
                 :disabled="attendanceRefetching[day.dateStr]"
-                :title="attendanceRefetching[day.dateStr] ? '正在从 OA 重新抓取该日考勤…' : '考勤异常？点击从 OA 重新抓取该日打卡记录'"
+                :title="attendanceRefetching[day.dateStr] ? '正在从 OA 重新抓取该日考勤…' : '打卡时间缺失？点击从 OA 重新抓取该日打卡记录'"
                 @click="refetchAttendance(day.dateStr)"
               >
                 <span v-if="attendanceRefetching[day.dateStr]" class="week-sync-spinner" style="width: 10px; height: 10px; border-width: 1.5px;"></span>
