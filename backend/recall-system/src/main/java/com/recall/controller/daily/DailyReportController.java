@@ -3,8 +3,11 @@ package com.recall.controller.daily;
 import com.recall.common.api.Result;
 import com.recall.dto.daily.DailyLeaveSaveReq;
 import com.recall.dto.daily.DailyReportSaveReq;
+import com.recall.dto.daily.DailyRewriteReq;
+import com.recall.service.daily.DailyForbiddenWords;
 import com.recall.service.daily.DailyLeaveService;
 import com.recall.service.daily.DailyReportService;
+import com.recall.service.daily.DailyRewriteService;
 import com.recall.vo.daily.DailyLeaveVO;
 import com.recall.vo.daily.DailyReportMonthVO;
 import com.recall.vo.daily.DailyReportVO;
@@ -20,6 +23,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * 日报 Controller（v1.0）。
@@ -45,6 +50,20 @@ public class DailyReportController {
 
     private final DailyReportService dailyReportService;
     private final DailyLeaveService dailyLeaveService;
+    private final DailyRewriteService dailyRewriteService;
+    private final DailyForbiddenWords dailyForbiddenWords;
+
+    @Operation(summary = "禁用词清单", description = "公司合规要求的日报禁用词（recall.daily.forbidden-words 配置），前端实时提示用")
+    @GetMapping("/forbidden-words")
+    public Result<List<String>> forbiddenWords() {
+        return Result.ok(dailyForbiddenWords.getWords());
+    }
+
+    @Operation(summary = "AI 合规改写", description = "按禁用词清单改写日报条目措辞（只换说法不换事实）；改写结果已复检，仍含禁用词抛 4902")
+    @PostMapping("/rewrite")
+    public Result<String> rewrite(@Valid @RequestBody DailyRewriteReq req) {
+        return Result.ok(dailyRewriteService.rewrite(req));
+    }
 
     @Operation(summary = "月度日报列表", description = "返回某月有日报的天（只含填了的，按日期升序），每个日报内嵌工作内容项与关联待办概要")
     @GetMapping

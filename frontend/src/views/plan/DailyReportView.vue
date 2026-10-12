@@ -356,16 +356,21 @@
           </p>
 
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <div v-for="(item, idx) in editorModal.items" :key="item.id" style="display: flex; align-items: center; gap: 10px; background-color: #f8fafc; padding: 12px; border: 1px solid var(--border-medium); border-radius: 8px;">
+            <div v-for="(item, idx) in editorModal.items" :key="item.id" style="display: flex; flex-direction: column; gap: 6px;">
+              <div
+                style="display: flex; align-items: center; gap: 10px; background-color: #f8fafc; padding: 12px; border: 1px solid var(--border-medium); border-radius: 8px;"
+                :style="forbiddenHits(item.content).length ? 'border-color: #ef4444;' : ''"
+              >
               <span style="font-size: 13px; font-weight: 700; color: var(--text-muted); min-width: 28px;">项{{ idx + 1 }}</span>
-              
+
               <!-- Item Text Content -->
-              <input 
-                type="text" 
-                v-model="item.content" 
-                class="form-control" 
-                placeholder="请输入工作内容描述..." 
+              <input
+                type="text"
+                v-model="item.content"
+                class="form-control"
+                placeholder="请输入工作内容描述..."
                 style="flex: 1; font-size: 13px; height: 36px; border: 1.5px solid var(--border-medium); border-radius: 6px; padding: 0 10px;"
+                :style="forbiddenHits(item.content).length ? 'border-color: #ef4444;' : ''"
               />
 
               <!-- Progress Percent Input -->
@@ -524,6 +529,30 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                 </svg>
               </button>
+              </div>
+
+              <!-- 禁用词提示 + AI 改写入口 -->
+              <div v-if="forbiddenHits(item.content).length" style="display: flex; align-items: center; gap: 8px; padding: 0 4px;">
+                <span style="font-size: 12px; color: #dc2626; font-weight: 600;">⚠ 包含禁用词：{{ forbiddenHits(item.content).join('、') }}</span>
+                <button
+                  class="btn btn-secondary"
+                  style="height: 24px; font-size: 11px; padding: 0 8px; display: flex; align-items: center; gap: 3px;"
+                  :disabled="rewriteState.loading && rewriteState.itemId === item.id"
+                  @click="openRewrite(item)"
+                >{{ rewriteState.loading && rewriteState.itemId === item.id ? '✨ 改写中…' : '✨ AI 改写' }}</button>
+              </div>
+
+              <!-- AI 改写结果面板 -->
+              <div v-if="rewriteState.itemId === item.id" style="background-color: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="font-size: 12px; color: #92400e; font-weight: 700;">AI 改写建议（只换说法不换事实，可微调后采用）：</div>
+                <textarea v-model="rewriteState.result" rows="2" class="form-control" style="font-size: 13px; border: 1.5px solid #fcd34d; border-radius: 6px; resize: vertical; line-height: 1.6; padding: 8px 10px;"></textarea>
+                <div v-if="rewriteState.result && rewriteStillForbidden" style="font-size: 11.5px; color: #dc2626;">改写结果仍包含禁用词：{{ forbiddenHits(rewriteState.result).join('、') }}，可点击重试</div>
+                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                  <button class="btn btn-secondary" style="height: 26px; font-size: 12px; padding: 0 10px;" @click="closeRewrite">放弃</button>
+                  <button class="btn btn-secondary" style="height: 26px; font-size: 12px; padding: 0 10px;" :disabled="rewriteState.loading" @click="doRewrite(item)">重试</button>
+                  <button class="btn btn-primary" style="height: 26px; font-size: 12px; padding: 0 10px;" :disabled="!rewriteState.result.trim() || rewriteStillForbidden" @click="applyRewrite(item)">采用</button>
+                </div>
+              </div>
             </div>
             
             <button 
@@ -1574,10 +1603,23 @@ const removeEditorItem = (idx: number) => {
 
 const saveDailyReportItems = async () => {
   const dateStr = editorModal.dateStr
-  
+
   // Filter out completely empty items
   const cleaned = editorModal.items.filter(item => item.content.trim() !== '')
-  
+
+  // 禁用词客户端拦截（后端保存另有兜底校验）
+  const hitItems = cleaned
+    .map((item, i) => ({ idx: i + 1, hits: forbiddenHits(item.content) }))
+    .filter(x => x.hits.length > 0)
+  if (hitItems.length > 0) {
+    const words = [...new Set(hitItems.flatMap(h => h.hits))].join('、')
+    const event = new CustomEvent('app-toast', {
+      detail: { text: `第${hitItems.map(h => h.idx).join('、')}项包含禁用词：${words}，请修改或使用 AI 改写`, type: 'error' }
+    })
+    window.dispatchEvent(event)
+    return
+  }
+
   try {
     if (cleaned.length === 0) {
       // Call delete endpoint if report is cleared
@@ -1608,6 +1650,64 @@ const saveDailyReportItems = async () => {
     window.dispatchEvent(event)
   }
 }
+
+// ===================== 禁用词合规 + AI 改写 =====================
+const forbiddenWords = ref<string[]>([])
+
+/** 文本命中的禁用词（忽略大小写，按清单顺序去重） */
+const forbiddenHits = (content: string | null | undefined): string[] => {
+  if (!content || !forbiddenWords.value.length) return []
+  const lower = content.toLowerCase()
+  return forbiddenWords.value.filter(w => lower.includes(w.toLowerCase()))
+}
+
+const rewriteState = reactive({ itemId: '', result: '', loading: false })
+const rewriteStillForbidden = computed(() => !!rewriteState.result && forbiddenHits(rewriteState.result).length > 0)
+
+const openRewrite = (item: { id: string; content: string; associatedTodoId: number | null }) => {
+  rewriteState.itemId = item.id
+  rewriteState.result = ''
+  doRewrite(item)
+}
+const closeRewrite = () => {
+  rewriteState.itemId = ''
+}
+
+const doRewrite = async (item: { id: string; content: string; associatedTodoId: number | null }) => {
+  if (rewriteState.loading) return
+  rewriteState.loading = true
+  try {
+    // 待办标题/描述作为改写辅助上下文（只换说法不换事实）
+    const todo = item.associatedTodoId
+      ? (editorModal.availableTodos as any[]).find(t => t.id === item.associatedTodoId)
+      : null
+    const res = await request.post('/api/daily-reports/rewrite', {
+      content: item.content,
+      todoTitle: todo?.title || '',
+      todoNote: todo?.content || ''
+    }, { timeout: 120000 })
+    rewriteState.result = (res.data as string) || ''
+  } catch {
+    // 错误提示已由 request 拦截器统一 toast（如改写结果仍含禁用词 4902）
+  } finally {
+    rewriteState.loading = false
+  }
+}
+
+const applyRewrite = (item: { content: string }) => {
+  if (!rewriteState.result.trim()) return
+  item.content = rewriteState.result.trim()
+  closeRewrite()
+}
+
+onMounted(async () => {
+  try {
+    const res = await request.get('/api/daily-reports/forbidden-words')
+    forbiddenWords.value = (res.data as string[]) || []
+  } catch {
+    // 拉取失败仅无实时提示，保存仍有后端兜底校验
+  }
+})
 
 const copyStructuredDayReport = async (day: DayItem) => {
   let content = ''

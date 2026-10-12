@@ -14,6 +14,7 @@ import com.recall.entity.daily.DailyReportItem;
 import com.recall.entity.todo.Todo;
 import com.recall.enums.LeavePeriod;
 import com.recall.service.daily.DailyAttendanceService;
+import com.recall.service.daily.DailyForbiddenWords;
 import com.recall.service.daily.DailyLeaveService;
 import com.recall.service.daily.DailyReportItemService;
 import com.recall.service.daily.DailyReportItemTodoService;
@@ -70,6 +71,7 @@ public class DailyReportServiceImpl implements DailyReportService {
     private final DailyReportItemTodoService dailyReportItemTodoService;
     private final DailyLeaveService dailyLeaveService;
     private final DailyAttendanceService dailyAttendanceService;
+    private final DailyForbiddenWords forbiddenWords;
     private final TodoService todoService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -250,7 +252,9 @@ public class DailyReportServiceImpl implements DailyReportService {
             throw new BusinessException(ResultCode.DAILY_REPORT_FUTURE_DATE);
         }
         Long userId = UserContextHolder.requireUserId();
-        // 2. 收集全部关联待办 id（去重），校验归属 + 当天相关
+        // 2. 禁用词校验（公司合规要求，逐项定位）
+        validateForbiddenWords(req.getItems());
+        // 3. 收集全部关联待办 id（去重），校验归属 + 当天相关
         validateRelatedTodos(date, req.getItems());
 
         // 3. upsert 日报主表（同用户同日期唯一）
@@ -290,6 +294,24 @@ public class DailyReportServiceImpl implements DailyReportService {
     }
 
     // ===================== 辅助 =====================
+
+    /**
+     * 校验所有日报项是否包含公司禁用词（4601 段语义：参数合规），逐项定位便于修改。
+     *
+     * @param items 日报项请求列表
+     */
+    private void validateForbiddenWords(List<DailyReportItemReq> items) {
+        List<String> errors = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
+            List<String> hits = forbiddenWords.findHits(items.get(i).getContent());
+            if (!hits.isEmpty()) {
+                errors.add("第" + (i + 1) + "项包含禁用词：" + String.join("、", hits));
+            }
+        }
+        if (!errors.isEmpty()) {
+            throw new BusinessException(ResultCode.PARAM_VALIDATE_FAILED, String.join("；", errors));
+        }
+    }
 
     /**
      * 校验所有日报项的关联待办：归属（不存在/越权统一 404）+ 当天相关（4602）。

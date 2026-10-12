@@ -53,6 +53,9 @@ recall:
     attendance:
       # 每日考勤抓取 cron（Asia/Shanghai）：抓前一天 + 近7天缺失补抓
       cron: 0 0 8 * * ?
+  daily:
+    # 日报禁用词（公司合规要求，逗号分隔；保存兜底校验与前端实时提示共用，改后需重启）
+    forbidden-words: 面谈,改造,优化,迭代,面试,培训,学习,PPT,新人,升级,答辩,晋升,晋级,竞赛,课程,技术交流,试点,工作交接,Deepseek
   llm:
     # 绩效面谈大模型网关（Anthropic 协议，POST {base-url}/v1/messages）
     base-url: http://192.168.3.77:13000
