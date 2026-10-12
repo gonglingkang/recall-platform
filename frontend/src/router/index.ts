@@ -97,6 +97,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/plan/RequirementsView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/meeting-minutes',
+    name: 'meeting-minutes',
+    component: () => import('@/views/plan/MeetingMinutesView.vue'),
+    meta: { requiresAuth: true },
+  },
 
 
   {

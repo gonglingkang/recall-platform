@@ -527,6 +527,20 @@ public class RequirementServiceImpl implements RequirementService {
         }
     }
 
+    @Override
+    public List<RequirementVO> listByStatuses(java.util.Collection<RequirementStatus> statuses) {
+        if (statuses == null || statuses.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> codes = statuses.stream().map(RequirementStatus::getValue).toList();
+        List<Requirement> list = requirementMapper.selectList(new LambdaQueryWrapper<Requirement>()
+                .eq(Requirement::getUserId, UserContextHolder.requireUserId())
+                .in(Requirement::getStatus, codes)
+                .orderByDesc(Requirement::getId));
+        // 不带文档与 K 详情（绑定选择场景只展示标题/分类/状态）
+        return list.stream().map(r -> toVO(r, null, null)).toList();
+    }
+
     private RequirementVO toVO(Requirement r, List<RequirementDocumentVO> docs, RequirementKeyResultVO krVO) {
         // 分类名称映射（分类与需求同用户，这里不再重复鉴权）
         String categoryName = null;

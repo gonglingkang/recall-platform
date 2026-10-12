@@ -34,11 +34,12 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final ObjectMapper objectMapper;
 
-    /** 放行路径：认证相关 + 健康检查 + Swagger */
+    /** 放行路径：认证相关 + 健康检查 + Swagger + 外部推送（自有 Token 鉴权） */
     private static final String[] WHITELIST = {
             "/api/auth/register",
             "/api/auth/login",
             "/api/auth/logout",
+            "/api/meeting-minutes/push",
             "/actuator/**",
             "/error",
             "/swagger-ui/**",

@@ -275,7 +275,7 @@ DROP TABLE IF EXISTS `requirement_documents`;
 CREATE TABLE `requirement_documents` (
     `id`              BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
     `user_id`         BIGINT        NOT NULL COMMENT '所属用户(数据隔离)',
-    `requirement_id`  BIGINT        NOT NULL COMMENT '归属需求ID',
+    `requirement_id`  BIGINT        NULL COMMENT '归属需求ID(NULL=未绑定,在会议纪要池)',
     `type`            VARCHAR(8)    NOT NULL COMMENT '文档类型 1原型设计/2需求文档/3会议纪要',
     `title`           VARCHAR(200)  NOT NULL COMMENT '文档标题',
     `url`             VARCHAR(2000) NOT NULL COMMENT '外部链接',
@@ -283,7 +283,8 @@ CREATE TABLE `requirement_documents` (
     `created_at`      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    KEY `idx_requirement` (`requirement_id`)
+    KEY `idx_requirement` (`requirement_id`),
+    KEY `idx_user_type_req` (`user_id`, `type`, `requirement_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='需求文档表(仅外部链接)';
 
 -- ---------------------------------------------------------------------

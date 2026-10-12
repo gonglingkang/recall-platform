@@ -6,6 +6,7 @@ import com.recall.dto.requirement.RequirementPageReq;
 import com.recall.dto.requirement.RequirementStatusReq;
 import com.recall.dto.requirement.RequirementUpdateReq;
 import com.recall.enums.KeyResultStatus;
+import com.recall.enums.RequirementStatus;
 import com.recall.vo.requirement.RequirementVO;
 
 import java.util.List;
@@ -28,6 +29,15 @@ public interface RequirementService {
      * @return 分页结果（列表项仅基础字段，不含文档与 K 详情）
      */
     PageResp<RequirementVO> page(RequirementPageReq req);
+
+    /**
+     * 按状态集合查询当前用户的需求（供会议纪要绑定选择等场景）。
+     * <p>列表项含分类名，不含文档与 K 详情；按 id 倒序。
+     *
+     * @param statuses 状态枚举集合；为空返回空列表
+     * @return 需求 VO 列表
+     */
+    List<RequirementVO> listByStatuses(java.util.Collection<RequirementStatus> statuses);
 
     /**
      * 需求详情（含文档列表与绑定的 K 摘要）。
