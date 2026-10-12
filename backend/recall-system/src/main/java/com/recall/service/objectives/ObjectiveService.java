@@ -93,4 +93,14 @@ public interface ObjectiveService {
      * @return 目标实体；checkOwnership=false 且查不到时返回 null
      */
     Objective getById(Long id, boolean checkOwnership);
+
+    /**
+     * 按关键词检索当前用户的目标（name/description LIKE，月份倒序）。
+     * <p>供全局搜索 Service 内部调用，禁止透传至 Controller/前端。
+     *
+     * @param keyword 关键词（调用方保证非空）
+     * @param limit   最大返回条数
+     * @return 命中的目标实体列表
+     */
+    List<Objective> searchOwned(String keyword, int limit);
 }

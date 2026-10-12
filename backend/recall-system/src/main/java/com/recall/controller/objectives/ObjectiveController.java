@@ -6,9 +6,11 @@ import com.recall.dto.objectives.ObjectiveImportParseReq;
 import com.recall.dto.objectives.ObjectiveImportReq;
 import com.recall.dto.objectives.ObjectiveUpdateReq;
 import com.recall.service.objectives.ObjectiveImportService;
+import com.recall.service.objectives.ObjectiveSearchService;
 import com.recall.service.objectives.ObjectiveService;
 import com.recall.vo.objectives.ObjectiveImportPreviewVO;
 import com.recall.vo.objectives.ObjectiveImportResultVO;
+import com.recall.vo.objectives.ObjectiveSearchHitVO;
 import com.recall.vo.objectives.ObjectiveVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -46,6 +48,7 @@ public class ObjectiveController {
 
     private final ObjectiveService objectiveService;
     private final ObjectiveImportService objectiveImportService;
+    private final ObjectiveSearchService objectiveSearchService;
 
     @Operation(summary = "目标列表", description = "某月目标列表，每个O内嵌其下所有K，派生字段已算好")
     @GetMapping
@@ -60,6 +63,13 @@ public class ObjectiveController {
     @GetMapping("/months")
     public Result<List<String>> listMonths() {
         return Result.ok(objectiveService.listMonths());
+    }
+
+    @Operation(summary = "全局搜索绩效", description = "跨月份按关键词检索目标名/描述、KR名/描述、成果记录内容；命中粒度=KR，展示其全部成果记录；月份倒序，最多50条")
+    @GetMapping("/search")
+    public Result<List<ObjectiveSearchHitVO>> search(@Parameter(description = "关键词（1~50字符）")
+                                                     @RequestParam @NotBlank(message = "搜索关键词不能为空") String keyword) {
+        return Result.ok(objectiveSearchService.search(keyword));
     }
 
     @Operation(summary = "新增目标", description = "名称在同用户同月内唯一；仅 name/description/month")

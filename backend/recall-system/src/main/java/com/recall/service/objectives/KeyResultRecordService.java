@@ -52,4 +52,14 @@ public interface KeyResultRecordService {
      * @param keyResultIds 关键成果 ID 列表；为空不执行
      */
     void deleteByKeyResultIds(List<Long> keyResultIds);
+
+    /**
+     * 按关键词检索当前用户的 R 内容，返回命中的关键成果 ID 去重列表。
+     * <p>供全局搜索 Service 内部调用，禁止透传至 Controller/前端。
+     *
+     * @param keyword 关键词（调用方保证非空）
+     * @param limit   最大返回条数（按去重后的 KR 计）
+     * @return 命中的关键成果 ID 列表（去重）
+     */
+    List<Long> searchKeyResultIds(String keyword, int limit);
 }

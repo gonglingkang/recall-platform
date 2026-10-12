@@ -328,6 +328,15 @@ public class ObjectiveServiceImpl implements ObjectiveService {
         return o;
     }
 
+    @Override
+    public List<Objective> searchOwned(String keyword, int limit) {
+        return objectiveMapper.selectList(new LambdaQueryWrapper<Objective>()
+                .eq(Objective::getUserId, UserContextHolder.requireUserId())
+                .and(w -> w.like(Objective::getName, keyword).or().like(Objective::getDescription, keyword))
+                .orderByDesc(Objective::getMonth)
+                .last("LIMIT " + Math.max(1, limit)));
+    }
+
     private void validateMonth(String month) {
         if (month == null || !month.matches("^\\d{4}-\\d{2}$")) {
             throw new BusinessException(ResultCode.PARAM_VALIDATE_FAILED, "月份格式应为 YYYY-MM");

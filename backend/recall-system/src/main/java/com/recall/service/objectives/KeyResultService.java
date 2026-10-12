@@ -111,4 +111,14 @@ public interface KeyResultService {
      * @return 删除条数
      */
     int deleteByObjective(Long objectiveId);
+
+    /**
+     * 按关键词检索当前用户的关键成果（name/description LIKE）。
+     * <p>供全局搜索 Service 内部调用，禁止透传至 Controller/前端。
+     *
+     * @param keyword 关键词（调用方保证非空）
+     * @param limit   最大返回条数
+     * @return 命中的关键成果实体列表
+     */
+    List<KeyResult> searchOwned(String keyword, int limit);
 }

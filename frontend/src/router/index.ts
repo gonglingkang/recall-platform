@@ -74,6 +74,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/plan/performance-search',
+    name: 'plan-performance-search',
+    component: () => import('@/views/plan/PerformanceSearchView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/plan/sprint/:month?',
     name: 'plan-sprint',
     component: () => import('@/views/plan/SprintView.vue'),

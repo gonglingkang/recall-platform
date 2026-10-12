@@ -91,4 +91,16 @@ public class KeyResultRecordServiceImpl implements KeyResultRecordService {
         keyResultRecordMapper.delete(new LambdaQueryWrapper<KeyResultRecord>()
                 .in(KeyResultRecord::getKeyResultId, keyResultIds));
     }
+
+    @Override
+    public List<Long> searchKeyResultIds(String keyword, int limit) {
+        List<KeyResultRecord> records = keyResultRecordMapper.selectList(new LambdaQueryWrapper<KeyResultRecord>()
+                .select(KeyResultRecord::getKeyResultId)
+                .eq(KeyResultRecord::getUserId, UserContextHolder.requireUserId())
+                .like(KeyResultRecord::getContent, keyword)
+                .orderByDesc(KeyResultRecord::getId)
+                .last("LIMIT " + Math.max(1, limit)));
+        // 去重保序（按命中记录新旧）
+        return records.stream().map(KeyResultRecord::getKeyResultId).distinct().toList();
+    }
 }

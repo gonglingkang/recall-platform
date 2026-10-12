@@ -344,6 +344,15 @@ public class KeyResultServiceImpl implements KeyResultService {
         return krs;
     }
 
+    @Override
+    public List<KeyResult> searchOwned(String keyword, int limit) {
+        return keyResultMapper.selectList(new LambdaQueryWrapper<KeyResult>()
+                .eq(KeyResult::getUserId, UserContextHolder.requireUserId())
+                .and(w -> w.like(KeyResult::getName, keyword).or().like(KeyResult::getDescription, keyword))
+                .orderByDesc(KeyResult::getId)
+                .last("LIMIT " + Math.max(1, limit)));
+    }
+
     private KeyResultVO toVO(KeyResult kr, List<Long> sprintIds, List<String> records) {
         return KeyResultVO.builder()
                 .id(kr.getId())
