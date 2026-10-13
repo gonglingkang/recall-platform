@@ -62,6 +62,10 @@
 
           <!-- Group Content Container -->
           <div class="group-content">
+            <!-- 空分类提示（分类始终展示，便于直接新增） -->
+            <div v-if="group.totalCount === 0" style="font-size: 12.5px; color: var(--text-muted); padding: 4px 2px;">
+              今日暂无待办，点击上方「新增待办」添加
+            </div>
             <!-- 1. Direct parent todos (if any) -->
             <div v-if="group.todos.length > 0" class="subgroup-direct-todos">
               <div class="todo-list">
@@ -781,18 +785,25 @@ const groupedTodos = computed(() => {
 
   // Order groups: categories list order, then uncategorized
   const result: TodoGroup[] = []
-  
+
   categories.value.forEach(cat => {
-    if (groupsMap[cat.id]) {
-      // Sort subgroups by subcategories list order
-      const subList = todoStore.subcategoriesByCategoryId(cat.id)
-      groupsMap[cat.id].subgroups.sort((a, b) => {
-        const idxA = subList.findIndex(s => s.id === a.id)
-        const idxB = subList.findIndex(s => s.id === b.id)
-        return idxA - idxB
-      })
-      result.push(groupsMap[cat.id])
+    // 空分类也保留整组（否则该分类整组消失，无法在其下新增待办）
+    const group = groupsMap[cat.id] || {
+      id: cat.id,
+      name: cat.name,
+      color: cat.color,
+      todos: [],
+      subgroups: [],
+      totalCount: 0
     }
+    // Sort subgroups by subcategories list order
+    const subList = todoStore.subcategoriesByCategoryId(cat.id)
+    group.subgroups.sort((a, b) => {
+      const idxA = subList.findIndex(s => s.id === a.id)
+      const idxB = subList.findIndex(s => s.id === b.id)
+      return idxA - idxB
+    })
+    result.push(group)
   })
 
   if (uncategorizedGroup.todos.length > 0) {
