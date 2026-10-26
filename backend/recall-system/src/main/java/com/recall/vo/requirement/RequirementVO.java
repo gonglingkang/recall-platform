@@ -70,6 +70,12 @@ public class RequirementVO {
     @Schema(description = "关联的文档列表")
     private List<RequirementDocumentVO> documents;
 
+    @Schema(description = "上线准备项总数（无清单为 null）")
+    private Long prepTotal;
+
+    @Schema(description = "上线准备已完成数（无清单为 null）")
+    private Long prepDone;
+
     @Schema(description = "创建时间")
     private LocalDateTime createdAt;
 

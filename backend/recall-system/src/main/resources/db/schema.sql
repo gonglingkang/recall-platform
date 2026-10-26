@@ -288,6 +288,25 @@ CREATE TABLE `requirement_documents` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='需求文档表(仅外部链接)';
 
 -- ---------------------------------------------------------------------
+-- 需求上线准备项表 requirement_preps（仅 开发完成/验收完成 状态可配置，可为空）
+-- title=条目名（如 建表语句），content=详细内容（可空，贴 SQL/脚本说明）
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `requirement_preps`;
+CREATE TABLE `requirement_preps` (
+    `id`             BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`        BIGINT       NOT NULL COMMENT '所属用户(数据隔离)',
+    `requirement_id` BIGINT       NOT NULL COMMENT '归属需求ID',
+    `title`          VARCHAR(100) NOT NULL COMMENT '准备项名称',
+    `content`        TEXT         NULL COMMENT '详细内容(SQL/脚本说明等)',
+    `done`           TINYINT      NOT NULL DEFAULT 0 COMMENT '是否完成 0未完成/1完成',
+    `sort_order`     INT          NOT NULL DEFAULT 0 COMMENT '排序',
+    `created_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_requirement` (`requirement_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='需求上线准备项表';
+
+-- ---------------------------------------------------------------------
 -- 需求分类表 requirement_categories（两级分类，单表 + parentId 表达层级）
 -- 与待办分类(categories)完全独立。parentId 为 null=主分类，非空=子分类。
 -- 删除规则：有子分类拒绝；有需求占用拒绝。不预置默认分类。

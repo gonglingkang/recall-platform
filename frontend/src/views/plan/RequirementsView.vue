@@ -343,6 +343,15 @@
               <span v-if="['0', '2'].includes(req.status) && req.keyResult && req.keyResult.planCompleteDate" class="info-item">
                 📅 预计完成: {{ req.keyResult.planCompleteDate }} (由 K 驱动)
               </span>
+              <!-- 上线准备进度（仅已配置时展示；点击查看只读详情，编辑走右侧按钮） -->
+              <span
+                v-if="(req.prepTotal || 0) > 0"
+                class="info-item prep-progress-chip"
+                title="点击查看上线准备详情"
+                @click.stop="openPrepModal(req, true)"
+              >
+                🧰 上线准备: {{ req.prepDone || 0 }}/{{ req.prepTotal || 0 }}
+              </span>
             </div>
 
             <!-- KR Binding Section -->
@@ -373,6 +382,19 @@
               <span>添加文档链接</span>
             </button>
 
+            <!-- 上线准备 Action（仅 开发完成/验收完成；发布完成通过时间行进度查看） -->
+            <button
+              class="card-action-btn btn-prep"
+              @click="openPrepModal(req)"
+              v-if="['3', '4'].includes(req.status)"
+              title="上线准备清单（建表/数据初始化/脚本接口等）"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+              </svg>
+              <span>上线准备</span>
+            </button>
+
             <!-- Status Transition Action -->
             <div class="status-transition-container" v-if="req.status !== '5'">
               <button 
@@ -401,6 +423,11 @@
                       <span class="dot" :style="{ backgroundColor: getStatusColor(state.value) }"></span>
                       <span class="lbl">{{ state.label }}</span>
                       <span v-if="req.keyResult && state.value === '1'" class="warn-badge">解绑 K</span>
+                      <span
+                        v-else-if="state.value === '5' && (req.prepTotal || 0) > 0 && (req.prepDone || 0) < (req.prepTotal || 0)"
+                        class="warn-badge"
+                        title="上线准备未完成，无法发布"
+                      >准备未完</span>
                     </button>
                     <div v-if="getLegalTransitions(req).length === 0" class="dropdown-empty">
                       当前不可手动流转
@@ -506,8 +533,8 @@
                     <span>文档时间: {{ doc.documentDate || formatDate(doc.createdAt || '') }}</span>
                   </div>
                 </div>
-                <button 
-                  class="remove-link-btn" 
+                <button
+                  class="remove-link-btn"
                   @click.stop="confirmDeleteDocument(req, doc)"
                   title="删除此链接"
                   v-if="req.status !== '5'"
@@ -520,6 +547,7 @@
             </div>
           </div>
         </div>
+
       </div>
     </template>
     </div>
@@ -1288,6 +1316,92 @@
       </div>
     </transition>
 
+    <!-- MODAL 8.5: 上线准备管理弹窗 -->
+    <transition name="modal-fade">
+      <div
+        v-if="prepModal.isOpen"
+        class="modal-overlay"
+        @mousedown.self="onMousedownOverlay"
+        @mouseup.self="onMouseupOverlay('prep')"
+        style="z-index: 2400;"
+      >
+        <div class="modal-card" style="max-width: 720px; width: 95%; max-height: 85vh; padding: 24px 28px; display: flex; flex-direction: column;" @click.stop>
+          <div class="modal-header" style="margin-bottom: 8px;">
+            <h2 style="font-size: 18px;">🧰 上线准备</h2>
+            <button class="close-modal-btn" @click="closePrepModal">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p style="font-size: 12.5px; color: var(--text-muted); margin: 0 0 12px 0;">
+            {{ prepModal.req?.title }}<template v-if="prepModal.readOnly">（只读查看，编辑请通过「上线准备」按钮进入）</template><template v-else-if="prepModal.req?.status === '5'">（已发布，仅可查看）</template>
+          </p>
+
+          <!-- 进度条 -->
+          <div v-if="prepModal.items.length > 0" style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-shrink: 0;">
+            <span style="font-size: 12.5px; font-weight: 700; color: var(--text-main);">{{ prepDoneCount }}/{{ prepModal.items.length }}</span>
+            <div style="flex: 1; height: 6px; border-radius: 3px; background-color: #e2e8f0; overflow: hidden;">
+              <div
+                style="height: 100%; border-radius: 3px; transition: width 0.2s;"
+                :style="{ width: prepModal.items.length ? Math.round((prepDoneCount / prepModal.items.length) * 100) + '%' : '0%', backgroundColor: prepDoneCount >= prepModal.items.length ? '#16a34a' : '#2563eb' }"
+              ></div>
+            </div>
+          </div>
+
+          <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
+            <div v-if="prepModal.loading" style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 24px 0;">加载中…</div>
+            <template v-else>
+              <div v-if="prepModal.items.length === 0" class="state-hint" style="padding: 28px 16px;">
+                暂无上线准备项
+                <button v-if="!prepModal.readOnly && prepModal.req?.status !== '5'" class="prep-text-btn" @click="generatePreps">按模板生成</button>
+              </div>
+
+              <div v-for="item in prepModal.items" :key="item.id" class="prep-item-card">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input
+                    type="checkbox"
+                    :checked="item.done"
+                    :disabled="prepModal.readOnly || prepModal.req?.status === '5'"
+                    @change="togglePrepDone(item)"
+                    style="width: 15px; height: 15px; cursor: pointer; flex-shrink: 0;"
+                  />
+                  <span
+                    style="font-size: 13px; font-weight: 600; flex: 1;"
+                    :style="{ color: item.done ? 'var(--text-muted)' : 'var(--text-main)', textDecoration: item.done ? 'line-through' : 'none' }"
+                  >{{ item.title }}</span>
+                  <button v-if="!prepModal.readOnly && prepModal.req?.status !== '5'" class="prep-text-btn" @click="handlePrepContentClick(item)">{{ prepModal.contentOpen[item.id] ? '保存内容' : '编辑内容' }}</button>
+                  <button v-if="!prepModal.readOnly && prepModal.req?.status !== '5'" class="prep-text-btn danger" @click="confirmDeletePrep(item)">{{ pendingDeletePrepId === item.id ? '确认删除？' : '删除' }}</button>
+                </div>
+                <div v-if="prepModal.contentOpen[item.id]" style="margin-top: 8px;">
+                  <textarea
+                    v-model="item.content"
+                    rows="4"
+                    class="form-textarea prep-content-textarea"
+                    placeholder="贴 SQL / 脚本接口说明…"
+                    style="font-family: Consolas, Monaco, monospace; font-size: 12px; line-height: 1.5;"
+                  ></textarea>
+                </div>
+                <pre v-else-if="item.content" class="prep-content-view" style="margin: 6px 0 0; font-size: 11.5px; white-space: pre-wrap; background: #f8fafc; border-radius: 6px; padding: 8px; color: var(--text-main);">{{ item.content }}</pre>
+              </div>
+
+              <div v-if="addPrepMode" style="display: flex; gap: 8px; align-items: center;">
+                <input v-model="addPrepForm.title" class="form-input" placeholder="准备项名称" style="height: 34px; font-size: 13px; flex: 1;" @keyup.enter="submitAddPrep" />
+                <button class="prep-text-btn" @click="submitAddPrep">添加</button>
+                <button class="prep-text-btn" @click="addPrepMode = false">取消</button>
+              </div>
+              <button
+                v-else-if="!prepModal.readOnly && prepModal.req?.status !== '5' && prepModal.items.length > 0"
+                class="prep-text-btn"
+                style="align-self: flex-start;"
+                @click="openAddPrep"
+              >＋ 添加准备项</button>
+            </template>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <!-- MODAL 9: Acceptance Done Modal -->
     <transition name="modal-fade">
       <div 
@@ -1465,6 +1579,8 @@ interface Requirement {
   documents: RequirementDocument[]
   createdAt: string
   acceptancePerson?: string
+  prepTotal?: number | null
+  prepDone?: number | null
 }
 
 const krMonthQuery = ref(new Date().toISOString().substring(0, 7))
@@ -2400,7 +2516,7 @@ function onMousedownOverlay(e: MouseEvent) {
   isMousedownOverlaySelf = e.target === e.currentTarget
 }
 
-function onMouseupOverlay(target: 'create' | 'edit' | 'link' | 'bind' | 'cancel' | 'select' | 'delete' | 'deleteDoc' | 'acceptance' | 'release') {
+function onMouseupOverlay(target: 'create' | 'edit' | 'link' | 'bind' | 'cancel' | 'select' | 'delete' | 'deleteDoc' | 'acceptance' | 'release' | 'prep') {
   if (isMousedownOverlaySelf) {
     if (target === 'create') closeCreateModal()
     else if (target === 'edit') closeEditModal()
@@ -2411,9 +2527,158 @@ function onMouseupOverlay(target: 'create' | 'edit' | 'link' | 'bind' | 'cancel'
     else if (target === 'deleteDoc') closeDeleteDocModal()
     else if (target === 'acceptance') closeAcceptanceModal()
     else if (target === 'release') closeReleaseModal()
+    else if (target === 'prep') closePrepModal()
   }
   isMousedownOverlaySelf = false
 }
+
+// ===================== 上线准备（弹窗管理） =====================
+interface PrepItem {
+  id: number
+  requirementId: number
+  title: string
+  content: string | null
+  done: boolean
+  sortOrder: number
+}
+
+const prepModal = reactive({
+  isOpen: false,
+  req: null as Requirement | null,
+  /** 只读模式（时间行进度胶囊入口）：仅查看，不可编辑 */
+  readOnly: false,
+  loading: false,
+  items: [] as PrepItem[],
+  contentOpen: {} as Record<number, boolean>
+})
+const pendingDeletePrepId = ref<number | null>(null)
+const addPrepMode = ref(false)
+const addPrepForm = reactive({ title: '' })
+
+const prepDoneCount = computed(() => prepModal.items.filter(i => i.done).length)
+
+const syncCardProgress = () => {
+  if (!prepModal.req) return
+  const card = requirements.value.find(r => r.id === prepModal.req!.id)
+  if (card) {
+    card.prepTotal = prepModal.items.length
+    card.prepDone = prepDoneCount.value
+  }
+}
+
+const openPrepModal = async (req: Requirement, readOnly = false) => {
+  prepModal.req = req
+  prepModal.readOnly = readOnly
+  prepModal.items = []
+  prepModal.contentOpen = {}
+  pendingDeletePrepId.value = null
+  addPrepMode.value = false
+  addPrepForm.title = ''
+  prepModal.isOpen = true
+  prepModal.loading = true
+  try {
+    const res = await request.get(`/api/requirements/${req.id}/preps`)
+    prepModal.items = (res.data as PrepItem[]) || []
+  } catch {
+    // 拦截器统一 toast
+  } finally {
+    prepModal.loading = false
+  }
+}
+
+const closePrepModal = () => {
+  prepModal.isOpen = false
+}
+
+const generatePreps = async () => {
+  if (!prepModal.req) return
+  try {
+    const res = await request.post(`/api/requirements/${prepModal.req.id}/preps/generate`)
+    prepModal.items = (res.data as PrepItem[]) || []
+    syncCardProgress()
+    dispatchToast('已按模板生成上线准备清单')
+  } catch {
+    // 拦截器统一 toast（如 已存在清单 409）
+  }
+}
+
+const openAddPrep = () => {
+  addPrepMode.value = true
+  addPrepForm.title = ''
+}
+
+const submitAddPrep = async () => {
+  if (!prepModal.req || !addPrepForm.title.trim()) return
+  try {
+    const res = await request.post(`/api/requirements/${prepModal.req.id}/preps`, {
+      title: addPrepForm.title.trim()
+    })
+    prepModal.items.push(res.data as PrepItem)
+    addPrepMode.value = false
+    addPrepForm.title = ''
+    syncCardProgress()
+    dispatchToast('已添加准备项')
+  } catch {
+    // 拦截器统一 toast
+  }
+}
+
+const togglePrepDone = async (item: PrepItem) => {
+  try {
+    const res = await request.put(`/api/requirement-preps/${item.id}`, { done: !item.done })
+    item.done = (res.data as PrepItem)?.done ?? !item.done
+    syncCardProgress()
+  } catch {
+    // 拦截器统一 toast
+  }
+}
+
+const togglePrepContent = (item: PrepItem) => {
+  prepModal.contentOpen[item.id] = !prepModal.contentOpen[item.id]
+}
+
+/** 编辑内容态下点「保存内容」= 保存并退出编辑；未编辑时点「编辑内容」= 进入编辑 */
+const handlePrepContentClick = async (item: PrepItem) => {
+  if (prepModal.contentOpen[item.id]) {
+    await savePrepContent(item)
+    prepModal.contentOpen[item.id] = false
+  } else {
+    prepModal.contentOpen[item.id] = true
+  }
+}
+
+const savePrepContent = async (item: PrepItem) => {
+  try {
+    const res = await request.put(`/api/requirement-preps/${item.id}`, { content: item.content || '' })
+    item.content = (res.data as PrepItem)?.content ?? null
+    dispatchToast('准备项内容已保存')
+  } catch {
+    // 拦截器统一 toast
+  }
+}
+
+let pendingDeleteTimer: number | null = null
+const confirmDeletePrep = async (item: PrepItem) => {
+  if (pendingDeletePrepId.value !== item.id) {
+    pendingDeletePrepId.value = item.id
+    if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer)
+    pendingDeleteTimer = window.setTimeout(() => {
+      pendingDeletePrepId.value = null
+    }, 3000)
+    return
+  }
+  pendingDeletePrepId.value = null
+  if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer)
+  try {
+    await request.delete(`/api/requirement-preps/${item.id}`)
+    prepModal.items = prepModal.items.filter(i => i.id !== item.id)
+    syncCardProgress()
+    dispatchToast('准备项已删除')
+  } catch {
+    // 拦截器统一 toast
+  }
+}
+
 </script>
 
 <style scoped>
@@ -3477,6 +3742,73 @@ select.form-input:disabled {
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+
+/* ===== 上线准备 ===== */
+.prep-progress-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+.prep-progress-chip:hover {
+  color: var(--primary);
+}
+.prep-progress-chip .prep-chip-done {
+  color: #15803d;
+  font-weight: 700;
+}
+.prep-progress-chip.all-done {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+.btn-prep {
+  color: #15803d;
+  border-color: rgba(21, 128, 61, 0.3);
+}
+.btn-prep:hover {
+  background-color: #f0fdf4;
+  color: #166534;
+}
+.prep-item-card {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background-color: #fafbfc;
+}
+.prep-text-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  white-space: nowrap;
+}
+.prep-text-btn:hover {
+  color: #1d4ed8;
+}
+.prep-text-btn.danger {
+  color: #dc2626;
+}
+.prep-text-btn.danger:hover {
+  color: #b91c1c;
+}
+.prep-content-textarea {
+  height: 150px;
+  max-height: 150px;
+  overflow-y: auto;
+  resize: vertical;
+}
+.prep-content-view {
+  max-height: 150px;
+  overflow-y: auto;
 }
 </style>
 

@@ -61,6 +61,9 @@ recall:
     push-token: mm_2f8a4c6e9d1b735a
     # 推送归属用户 ID（个人平台，推送统一挂该用户名下）
     owner-user-id: 140
+  requirement:
+    # 上线准备默认模板（逗号分隔；空清单合法，仅用户点击"按模板生成"时实例化）
+    prep-template: 建表语句,数据初始化,脚本接口初始化
   llm:
     # 绩效面谈大模型网关（Anthropic 协议，POST {base-url}/v1/messages）
     base-url: http://192.168.3.77:13000

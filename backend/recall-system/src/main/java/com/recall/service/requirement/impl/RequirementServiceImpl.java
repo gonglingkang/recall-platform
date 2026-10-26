@@ -21,6 +21,7 @@ import com.recall.enums.RequirementStatus;
 import com.recall.service.objectives.KeyResultService;
 import com.recall.service.requirement.RequirementCategoryService;
 import com.recall.service.requirement.RequirementDocumentService;
+import com.recall.service.requirement.RequirementPrepService;
 import com.recall.service.requirement.RequirementService;
 import com.recall.vo.requirement.RequirementDocumentVO;
 import com.recall.vo.requirement.RequirementKeyResultVO;
@@ -35,6 +36,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 需求 Service 实现。
@@ -52,6 +54,7 @@ public class RequirementServiceImpl implements RequirementService {
 
     private final RequirementMapper requirementMapper;
     private final RequirementDocumentService requirementDocumentService;
+    private final RequirementPrepService requirementPrepService;
     private final RequirementCategoryService requirementCategoryService;
     @Lazy
     private final KeyResultService keyResultService;
@@ -95,6 +98,18 @@ public class RequirementServiceImpl implements RequirementService {
         List<RequirementVO> records = result.getRecords().stream()
                 .map(r -> toVO(r, requirementDocumentService.listByRequirement(r.getId()), toKeyResultVO(r.getKeyResultId())))
                 .toList();
+        // 上线准备进度批量填充（列表卡片展示用，避免 N+1）
+        if (!records.isEmpty()) {
+            Map<Long, RequirementPrepService.PrepStat> prepStats = requirementPrepService.countByRequirementIds(
+                    records.stream().map(RequirementVO::getId).toList());
+            records.forEach(vo -> {
+                RequirementPrepService.PrepStat stat = prepStats.get(vo.getId());
+                if (stat != null) {
+                    vo.setPrepTotal(stat.total());
+                    vo.setPrepDone(stat.done());
+                }
+            });
+        }
         return PageResp.<RequirementVO>builder()
                 .records(records)
                 .total(result.getTotal())
@@ -201,6 +216,15 @@ public class RequirementServiceImpl implements RequirementService {
         // 手动状态机校验
         validateManualTransition(current, target);
 
+        // 进入发布完成前校验：上线准备清单存在且有未完成项时，禁止发布（清单可为空，为空不拦）
+        if (target == RequirementStatus.RELEASED) {
+            RequirementPrepService.PrepStat prepStat = requirementPrepService.countByRequirementIds(List.of(id)).get(id);
+            if (prepStat != null && prepStat.total() > 0 && prepStat.done() < prepStat.total()) {
+                throw new BusinessException(ResultCode.CONFLICT,
+                        "上线准备未完成（" + prepStat.done() + "/" + prepStat.total() + "），不能变更为发布完成");
+            }
+        }
+
         if (target == RequirementStatus.NOT_INVOLVED) {
             // 进入不涉及：决定不做，解绑 K，填不涉及原因，清开发完成时间
             r.setStatus(target.getValue());
@@ -244,6 +268,7 @@ public class RequirementServiceImpl implements RequirementService {
     public void delete(Long id) {
         loadOwned(id);
         requirementDocumentService.deleteByRequirement(id);
+        requirementPrepService.deleteByRequirement(id);
         requirementMapper.deleteById(id);
     }
 
