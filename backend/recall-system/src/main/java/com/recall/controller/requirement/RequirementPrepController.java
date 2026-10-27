@@ -42,12 +42,6 @@ public class RequirementPrepController {
         return Result.ok(requirementPrepService.listByRequirement(id));
     }
 
-    @Operation(summary = "按模板生成上线准备", description = "仅当清单为空时允许；模板配置于 recall.requirement.prep-template")
-    @PostMapping("/requirements/{id}/preps/generate")
-    public Result<List<RequirementPrepVO>> generate(@Parameter(description = "需求ID") @PathVariable Long id) {
-        return Result.ok(requirementPrepService.generateByTemplate(id));
-    }
-
     @Operation(summary = "新增准备项", description = "手动添加一条上线准备项")
     @PostMapping("/requirements/{id}/preps")
     public Result<RequirementPrepVO> create(@Parameter(description = "需求ID") @PathVariable Long id,

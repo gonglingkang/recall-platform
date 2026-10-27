@@ -14,12 +14,10 @@ import com.recall.service.requirement.RequirementService;
 import com.recall.vo.requirement.RequirementPrepVO;
 import com.recall.vo.requirement.RequirementVO;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -47,9 +45,6 @@ public class RequirementPrepServiceImpl implements RequirementPrepService {
     @Lazy
     private final RequirementService requirementService;
 
-    @Value("${recall.requirement.prep-template:}")
-    private String prepTemplate;
-
     @Override
     public List<RequirementPrepVO> listByRequirement(Long requirementId) {
         requirementService.checkOwned(requirementId);
@@ -58,36 +53,6 @@ public class RequirementPrepServiceImpl implements RequirementPrepService {
                         .orderByAsc(RequirementPrep::getSortOrder)
                         .orderByAsc(RequirementPrep::getId))
                 .stream().map(this::toVO).toList();
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public List<RequirementPrepVO> generateByTemplate(Long requirementId) {
-        RequirementVO requirement = requireConfigurable(requirementId);
-        Long count = requirementPrepMapper.selectCount(new LambdaQueryWrapper<RequirementPrep>()
-                .eq(RequirementPrep::getRequirementId, requirement.getId()));
-        if (count != null && count > 0) {
-            throw new BusinessException(ResultCode.CONFLICT, "该需求已存在上线准备项，不能重复生成");
-        }
-        List<String> titles = Arrays.stream(prepTemplate.split("[,，]"))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .toList();
-        if (titles.isEmpty()) {
-            throw new BusinessException(ResultCode.PARAM_VALIDATE_FAILED, "未配置上线准备模板（recall.requirement.prep-template）");
-        }
-        Long userId = UserContextHolder.requireUserId();
-        int sort = 0;
-        for (String title : titles) {
-            RequirementPrep prep = new RequirementPrep();
-            prep.setUserId(userId);
-            prep.setRequirementId(requirement.getId());
-            prep.setTitle(title);
-            prep.setDone(0);
-            prep.setSortOrder(sort++);
-            requirementPrepMapper.insert(prep);
-        }
-        return listByRequirement(requirementId);
     }
 
     @Override

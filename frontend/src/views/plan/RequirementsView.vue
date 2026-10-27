@@ -1325,7 +1325,7 @@
         @mouseup.self="onMouseupOverlay('prep')"
         style="z-index: 2400;"
       >
-        <div class="modal-card" style="max-width: 720px; width: 95%; max-height: 85vh; padding: 24px 28px; display: flex; flex-direction: column;" @click.stop>
+        <div class="modal-card" style="max-width: 880px; width: 95%; height: 600px; max-height: 88vh; padding: 24px 28px; display: flex; flex-direction: column;" @click.stop>
           <div class="modal-header" style="margin-bottom: 8px;">
             <h2 style="font-size: 18px;">🧰 上线准备</h2>
             <button class="close-modal-btn" @click="closePrepModal">
@@ -1349,54 +1349,117 @@
             </div>
           </div>
 
-          <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
-            <div v-if="prepModal.loading" style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 24px 0;">加载中…</div>
-            <template v-else>
-              <div v-if="prepModal.items.length === 0" class="state-hint" style="padding: 28px 16px;">
-                暂无上线准备项
-                <button v-if="!prepModal.readOnly && prepModal.req?.status !== '5'" class="prep-text-btn" @click="generatePreps">按模板生成</button>
-              </div>
-
-              <div v-for="item in prepModal.items" :key="item.id" class="prep-item-card">
-                <div style="display: flex; align-items: center; gap: 8px;">
+          <!-- 两栏：左=准备项清单，右=选中项内容 -->
+          <div style="display: flex; gap: 16px; flex: 1; min-height: 0;">
+            <!-- 左栏：准备项清单 -->
+            <div style="width: 260px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--border-light); border-radius: var(--radius-md); background-color: #fafbfc;">
+              <div style="flex: 1; overflow-y: auto; padding: 6px;">
+                <div v-if="prepModal.loading" style="font-size: 12.5px; color: var(--text-muted); text-align: center; padding: 20px 0;">加载中…</div>
+                <div v-else-if="prepModal.items.length === 0" style="font-size: 12.5px; color: var(--text-muted); text-align: center; padding: 20px 8px; line-height: 1.7;">
+                  暂无准备项<br />点击右侧「＋ 新建准备项」创建
+                </div>
+                <div
+                  v-for="item in prepModal.items"
+                  :key="item.id"
+                  class="prep-left-item"
+                  :class="{ selected: prepModal.selectedId === item.id, 'is-done': item.done }"
+                  @click="selectPrep(item)"
+                >
                   <input
                     type="checkbox"
                     :checked="item.done"
                     :disabled="prepModal.readOnly || prepModal.req?.status === '5'"
                     @change="togglePrepDone(item)"
-                    style="width: 15px; height: 15px; cursor: pointer; flex-shrink: 0;"
+                    @click.stop
+                    title="标记完成"
+                    style="width: 14px; height: 14px; cursor: pointer; flex-shrink: 0;"
                   />
-                  <span
-                    style="font-size: 13px; font-weight: 600; flex: 1;"
-                    :style="{ color: item.done ? 'var(--text-muted)' : 'var(--text-main)', textDecoration: item.done ? 'line-through' : 'none' }"
-                  >{{ item.title }}</span>
-                  <button v-if="!prepModal.readOnly && prepModal.req?.status !== '5'" class="prep-text-btn" @click="handlePrepContentClick(item)">{{ prepModal.contentOpen[item.id] ? '保存内容' : '编辑内容' }}</button>
-                  <button v-if="!prepModal.readOnly && prepModal.req?.status !== '5'" class="prep-text-btn danger" @click="confirmDeletePrep(item)">{{ pendingDeletePrepId === item.id ? '确认删除？' : '删除' }}</button>
+                  <span class="prep-left-title">{{ item.title }}</span>
+                  <button
+                    v-if="!prepModal.readOnly && prepModal.req?.status !== '5'"
+                    class="prep-left-delete"
+                    :class="{ confirm: pendingDeletePrepId === item.id }"
+                    :title="pendingDeletePrepId === item.id ? '再次点击确认删除' : '删除'"
+                    @click.stop="confirmDeletePrep(item)"
+                  >{{ pendingDeletePrepId === item.id ? '确认?' : '×' }}</button>
                 </div>
-                <div v-if="prepModal.contentOpen[item.id]" style="margin-top: 8px;">
-                  <textarea
-                    v-model="item.content"
-                    rows="4"
-                    class="form-textarea prep-content-textarea"
-                    placeholder="贴 SQL / 脚本接口说明…"
-                    style="font-family: Consolas, Monaco, monospace; font-size: 12px; line-height: 1.5;"
-                  ></textarea>
-                </div>
-                <pre v-else-if="item.content" class="prep-content-view" style="margin: 6px 0 0; font-size: 11.5px; white-space: pre-wrap; background: #f8fafc; border-radius: 6px; padding: 8px; color: var(--text-main);">{{ item.content }}</pre>
+              </div>
+            </div>
+
+            <!-- 右栏：新建 / 选中项内容 -->
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--border-light); border-radius: var(--radius-md); background-color: #fff;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border-light); flex-shrink: 0;">
+                <span style="font-size: 12.5px; font-weight: 700; color: var(--text-muted);">{{ createPrepMode ? '新建准备项' : '准备项内容' }}</span>
+                <button
+                  v-if="!prepModal.readOnly && prepModal.req?.status !== '5' && !createPrepMode"
+                  class="prep-pane-btn"
+                  @click="startCreatePrep"
+                >＋ 新建准备项</button>
               </div>
 
-              <div v-if="addPrepMode" style="display: flex; gap: 8px; align-items: center;">
-                <input v-model="addPrepForm.title" class="form-input" placeholder="准备项名称" style="height: 34px; font-size: 13px; flex: 1;" @keyup.enter="submitAddPrep" />
-                <button class="prep-text-btn" @click="submitAddPrep">添加</button>
-                <button class="prep-text-btn" @click="addPrepMode = false">取消</button>
+              <!-- 新建表单 -->
+              <template v-if="createPrepMode">
+                <div class="form-group" style="padding: 12px 14px 0;">
+                  <label>准备项名称<span class="required-star">*</span></label>
+                  <input
+                    v-model="createPrepForm.title"
+                    type="text"
+                    class="form-input"
+                    style="height: 38px; font-size: 13.5px;"
+                    placeholder="如 建表语句 / 数据初始化 / 脚本接口初始化"
+                    @keyup.enter="submitCreatePrep"
+                  />
+                </div>
+                <div class="form-group" style="flex: 1; min-height: 0; padding: 10px 14px 0; display: flex; flex-direction: column;">
+                  <label>内容（SQL / 脚本接口说明）</label>
+                  <textarea
+                    v-model="createPrepForm.content"
+                    class="form-textarea prep-content-textarea"
+                    placeholder="贴建表 DDL / 刷数 SQL / 后门接口说明…"
+                    style="flex: 1; font-family: Consolas, Monaco, monospace; font-size: 13.5px; line-height: 1.6;"
+                  ></textarea>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; padding: 10px 14px; flex-shrink: 0;">
+                  <button type="button" class="action-btn-secondary" style="padding: 8px 18px; font-size: 13.5px;" :disabled="creatingPrep" @click="cancelCreatePrep">取消</button>
+                  <button
+                    type="button"
+                    class="action-btn-primary"
+                    style="padding: 8px 20px; font-size: 13.5px;"
+                    :disabled="creatingPrep || !createPrepForm.title.trim()"
+                    @click="submitCreatePrep"
+                  >{{ creatingPrep ? '创建中…' : '创建' }}</button>
+                </div>
+              </template>
+
+              <!-- 选中项内容 -->
+              <template v-else-if="selectedPrep">
+                <div class="prep-detail-title" :class="{ 'is-done': selectedPrep.done }">
+                  {{ selectedPrep.title }}
+                  <span v-if="selectedPrep.done" style="font-size: 11px; font-weight: 700; color: #15803d; background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 1px 8px; border-radius: 10px; margin-left: 8px;">已完成</span>
+                </div>
+                <textarea
+                  v-if="!prepModal.readOnly && prepModal.req?.status !== '5'"
+                  v-model="selectedPrep.content"
+                  class="form-textarea prep-content-textarea"
+                  placeholder="贴建表 DDL / 刷数 SQL / 后门接口说明…"
+                  style="flex: 1; margin: 0 14px; font-family: Consolas, Monaco, monospace; font-size: 12.5px; line-height: 1.6;"
+                ></textarea>
+                <pre v-else class="prep-content-view" style="flex: 1; margin: 0 14px; font-size: 12px;">{{ selectedPrep.content || '（无内容）' }}</pre>
+                <div style="display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 10px 14px; flex-shrink: 0;">
+                  <span v-if="!prepModal.readOnly && prepModal.req?.status !== '5'" style="font-size: 11.5px; color: var(--text-muted); margin-right: auto;">内容可贴建表 DDL / 刷数 SQL / 后门接口说明</span>
+                  <button
+                    type="button"
+                    class="action-btn-primary"
+                    style="padding: 8px 20px; font-size: 13.5px;"
+                    :disabled="contentSaving"
+                    @click="saveSelectedContent"
+                  >{{ contentSaving ? '保存中…' : '保存内容' }}</button>
+                </div>
+              </template>
+              <div v-else class="state-hint" style="margin: auto; border: none;">
+                ← 在左侧选择准备项查看 / 编辑内容，或点击上方「＋ 新建准备项」
               </div>
-              <button
-                v-else-if="!prepModal.readOnly && prepModal.req?.status !== '5' && prepModal.items.length > 0"
-                class="prep-text-btn"
-                style="align-self: flex-start;"
-                @click="openAddPrep"
-              >＋ 添加准备项</button>
-            </template>
+            </div>
           </div>
         </div>
       </div>
@@ -2549,13 +2612,39 @@ const prepModal = reactive({
   readOnly: false,
   loading: false,
   items: [] as PrepItem[],
-  contentOpen: {} as Record<number, boolean>
+  /** 左栏选中的准备项（右栏展示其内容） */
+  selectedId: null as number | null
 })
 const pendingDeletePrepId = ref<number | null>(null)
-const addPrepMode = ref(false)
-const addPrepForm = reactive({ title: '' })
+const contentSaving = ref(false)
+
+/** 新建准备项（右栏直接填完整信息） */
+const createPrepMode = ref(false)
+const createPrepForm = reactive({ title: '', content: '' })
+const creatingPrep = ref(false)
+
+/** 保存右栏选中项的内容 */
+const saveSelectedContent = async () => {
+  const item = selectedPrep.value
+  if (!item || contentSaving.value) return
+  contentSaving.value = true
+  try {
+    const res = await request.put(`/api/requirement-preps/${item.id}`, { content: item.content || '' })
+    item.content = (res.data as PrepItem)?.content ?? null
+    dispatchToast('准备项内容已保存')
+  } catch {
+    // 拦截器统一 toast
+  } finally {
+    contentSaving.value = false
+  }
+}
 
 const prepDoneCount = computed(() => prepModal.items.filter(i => i.done).length)
+const selectedPrep = computed(() => prepModal.items.find(i => i.id === prepModal.selectedId) || null)
+
+const selectPrep = (item: PrepItem) => {
+  prepModal.selectedId = item.id
+}
 
 const syncCardProgress = () => {
   if (!prepModal.req) return
@@ -2570,15 +2659,18 @@ const openPrepModal = async (req: Requirement, readOnly = false) => {
   prepModal.req = req
   prepModal.readOnly = readOnly
   prepModal.items = []
-  prepModal.contentOpen = {}
+  prepModal.selectedId = null
   pendingDeletePrepId.value = null
-  addPrepMode.value = false
-  addPrepForm.title = ''
+  createPrepMode.value = false
+  createPrepForm.title = ''
+  createPrepForm.content = ''
   prepModal.isOpen = true
   prepModal.loading = true
   try {
     const res = await request.get(`/api/requirements/${req.id}/preps`)
     prepModal.items = (res.data as PrepItem[]) || []
+    // 默认选中第一项，右栏直接可看内容
+    prepModal.selectedId = prepModal.items[0]?.id ?? null
   } catch {
     // 拦截器统一 toast
   } finally {
@@ -2590,36 +2682,36 @@ const closePrepModal = () => {
   prepModal.isOpen = false
 }
 
-const generatePreps = async () => {
-  if (!prepModal.req) return
-  try {
-    const res = await request.post(`/api/requirements/${prepModal.req.id}/preps/generate`)
-    prepModal.items = (res.data as PrepItem[]) || []
-    syncCardProgress()
-    dispatchToast('已按模板生成上线准备清单')
-  } catch {
-    // 拦截器统一 toast（如 已存在清单 409）
-  }
+const startCreatePrep = () => {
+  createPrepMode.value = true
+  createPrepForm.title = ''
+  createPrepForm.content = ''
 }
 
-const openAddPrep = () => {
-  addPrepMode.value = true
-  addPrepForm.title = ''
+const cancelCreatePrep = () => {
+  createPrepMode.value = false
 }
 
-const submitAddPrep = async () => {
-  if (!prepModal.req || !addPrepForm.title.trim()) return
+const submitCreatePrep = async () => {
+  if (!prepModal.req || !createPrepForm.title.trim() || creatingPrep.value) return
+  creatingPrep.value = true
   try {
     const res = await request.post(`/api/requirements/${prepModal.req.id}/preps`, {
-      title: addPrepForm.title.trim()
+      title: createPrepForm.title.trim(),
+      content: createPrepForm.content.trim() || undefined
     })
-    prepModal.items.push(res.data as PrepItem)
-    addPrepMode.value = false
-    addPrepForm.title = ''
+    const created = res.data as PrepItem
+    prepModal.items.push(created)
+    prepModal.selectedId = created.id
+    createPrepMode.value = false
+    createPrepForm.title = ''
+    createPrepForm.content = ''
     syncCardProgress()
-    dispatchToast('已添加准备项')
+    dispatchToast('已创建准备项')
   } catch {
     // 拦截器统一 toast
+  } finally {
+    creatingPrep.value = false
   }
 }
 
@@ -2628,30 +2720,6 @@ const togglePrepDone = async (item: PrepItem) => {
     const res = await request.put(`/api/requirement-preps/${item.id}`, { done: !item.done })
     item.done = (res.data as PrepItem)?.done ?? !item.done
     syncCardProgress()
-  } catch {
-    // 拦截器统一 toast
-  }
-}
-
-const togglePrepContent = (item: PrepItem) => {
-  prepModal.contentOpen[item.id] = !prepModal.contentOpen[item.id]
-}
-
-/** 编辑内容态下点「保存内容」= 保存并退出编辑；未编辑时点「编辑内容」= 进入编辑 */
-const handlePrepContentClick = async (item: PrepItem) => {
-  if (prepModal.contentOpen[item.id]) {
-    await savePrepContent(item)
-    prepModal.contentOpen[item.id] = false
-  } else {
-    prepModal.contentOpen[item.id] = true
-  }
-}
-
-const savePrepContent = async (item: PrepItem) => {
-  try {
-    const res = await request.put(`/api/requirement-preps/${item.id}`, { content: item.content || '' })
-    item.content = (res.data as PrepItem)?.content ?? null
-    dispatchToast('准备项内容已保存')
   } catch {
     // 拦截器统一 toast
   }
@@ -2672,6 +2740,9 @@ const confirmDeletePrep = async (item: PrepItem) => {
   try {
     await request.delete(`/api/requirement-preps/${item.id}`)
     prepModal.items = prepModal.items.filter(i => i.id !== item.id)
+    if (prepModal.selectedId === item.id) {
+      prepModal.selectedId = prepModal.items[0]?.id ?? null
+    }
     syncCardProgress()
     dispatchToast('准备项已删除')
   } catch {
@@ -3774,41 +3845,101 @@ select.form-input:disabled {
   background-color: #f0fdf4;
   color: #166534;
 }
-.prep-item-card {
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  padding: 8px 10px;
-  background-color: #fafbfc;
+/* 两栏弹窗：左栏清单项 */
+.prep-left-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
 }
-.prep-text-btn {
+.prep-left-item:hover {
+  background-color: #f1f5f9;
+}
+.prep-left-item.selected {
+  background-color: #eff6ff;
+  box-shadow: inset 2px 0 0 #2563eb;
+}
+.prep-left-item.is-done .prep-left-title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.prep-left-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.prep-left-item.is-done .prep-left-title {
+  font-weight: 500;
+}
+.prep-left-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.prep-left-delete:hover {
+  color: #ef4444;
+  background-color: #fee2e2;
+}
+.prep-left-delete.confirm {
+  color: #fff;
+  background-color: #ef4444;
+  font-size: 11px;
+  font-weight: 700;
+}
+.prep-pane-btn {
   font-size: 12px;
   font-weight: 600;
   color: var(--primary);
-  background: none;
-  border: none;
-  padding: 2px 4px;
+  background: #fff;
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  padding: 4px 10px;
   cursor: pointer;
-  text-decoration: underline dotted;
   white-space: nowrap;
+  transition: all var(--transition-fast);
 }
-.prep-text-btn:hover {
+.prep-pane-btn:hover {
   color: #1d4ed8;
+  border-color: #1d4ed8;
 }
-.prep-text-btn.danger {
-  color: #dc2626;
+.prep-detail-title {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--text-main);
+  padding: 12px 14px 10px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
-.prep-text-btn.danger:hover {
-  color: #b91c1c;
+.prep-detail-title.is-done {
+  color: var(--text-muted);
+  text-decoration: line-through;
 }
 .prep-content-textarea {
-  height: 150px;
-  max-height: 150px;
-  overflow-y: auto;
-  resize: vertical;
+  resize: none;
+}
+.prep-content-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: none;
 }
 .prep-content-view {
-  max-height: 150px;
   overflow-y: auto;
+  background-color: #f8fafc;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
 }
 </style>
 

@@ -31,14 +31,6 @@ public interface RequirementPrepService {
     List<RequirementPrepVO> listByRequirement(Long requirementId);
 
     /**
-     * 按模板生成上线准备清单（仅当清单为空时允许，幂等保护）。
-     *
-     * @param requirementId 需求 ID
-     * @return 生成后的清单
-     */
-    List<RequirementPrepVO> generateByTemplate(Long requirementId);
-
-    /**
      * 手动新增准备项。
      *
      * @param requirementId 需求 ID
