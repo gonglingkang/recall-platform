@@ -38,6 +38,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/todo-templates',
+    name: 'todo-templates',
+    component: () => import('@/views/todo/TodoTemplateView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/category/:id',
     name: 'category',
     component: () => import('@/views/todo/CategoryView.vue'),

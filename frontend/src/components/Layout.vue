@@ -53,6 +53,13 @@
             </svg>
             <span class="nav-text">日历视图</span>
           </router-link>
+
+          <router-link to="/todo-templates" class="nav-item" active-class="nav-item-active" :class="{ 'nav-item-active': $route.name === 'todo-templates' }">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="nav-icon">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span class="nav-text">定时待办</span>
+          </router-link>
         </div>
 
         <!-- Productivity Group -->

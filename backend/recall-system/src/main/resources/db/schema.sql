@@ -74,6 +74,31 @@ CREATE TABLE `todos` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='待办表';
 
 -- ---------------------------------------------------------------------
+-- 周期待办模板表 todo_templates（定时任务按周期生成待办）
+-- 完成门控：last_todo_id 指向最近生成的待办，其仍为待处理(0)时不生成下一条；
+-- 待办被删除视为已处理，门控放开。next_date 由任务生成后推进到下一周期日。
+-- ---------------------------------------------------------------------
+DROP TABLE IF EXISTS `todo_templates`;
+CREATE TABLE `todo_templates` (
+    `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`         BIGINT       NOT NULL COMMENT '所属用户(数据隔离)',
+    `title`           VARCHAR(100) NOT NULL COMMENT '待办标题',
+    `note`            VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `category_id`     BIGINT       DEFAULT NULL COMMENT '分类ID',
+    `priority`        VARCHAR(10)  NOT NULL DEFAULT '1' COMMENT '优先级 0低/1中/2高',
+    `recurrence_type` VARCHAR(10)  NOT NULL COMMENT '周期类型 DAILY/WEEKLY/MONTHLY',
+    `recurrence_value` VARCHAR(50) NOT NULL COMMENT 'WEEKLY:1-7(周一=1,逗号分隔);MONTHLY:1-31;DAILY:*',
+    `recurrence_time` VARCHAR(5) NOT NULL DEFAULT '09:00' COMMENT '周期日内生成时间点 HH:mm',
+    `enabled`         TINYINT      NOT NULL DEFAULT 1 COMMENT '是否启用 0停用/1启用',
+    `next_date`       DATE         NOT NULL COMMENT '下次生成日期',
+    `last_todo_id`    BIGINT       DEFAULT NULL COMMENT '最近生成的待办ID(完成门控)',
+    `created_at`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_user_enabled` (`user_id`, `enabled`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='周期待办模板表';
+
+-- ---------------------------------------------------------------------
 -- 9.7 月团队冲刺表 sprint_items
 -- 冲刺任务可关联多个关键成果 K（通过 sprint_key_results 关联表）；
 -- 关联 K 后，K 状态变更会联动同步冲刺状态。
