@@ -61,9 +61,22 @@
 
     <!-- Main Monthly Progress Card -->
     <div class="monthly-total-progress-card premium-card">
-      <div class="progress-header-row">
+      <div class="progress-header-row" style="align-items: center;">
         <span class="progress-title-lbl">本月绩效总进度</span>
-        <span class="progress-percentage-val">{{ krCompletionRate }}%</span>
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <span class="progress-percentage-val">{{ krCompletionRate }}%</span>
+          <button
+            type="button"
+            class="timeline-preview-btn"
+            title="以时间轴形式查看本月各 K 的完成/计划分布"
+            @click="isTimelineModalOpen = true"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 14px; height: 14px;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+            </svg>
+            <span>K 时间轴预览</span>
+          </button>
+        </div>
       </div>
 
       <!-- Main Progress Bar -->
@@ -78,6 +91,27 @@
         <span class="update-time-lbl">
           更新于 {{ new Date().toISOString().split('T')[0] }}
         </span>
+      </div>
+    </div>
+
+    <!-- K 进度时间轴预览弹窗 -->
+    <div
+      v-if="isTimelineModalOpen"
+      class="modal-overlay"
+      @mousedown="mousedownTarget = $event.target"
+      @click="mousedownTarget === $event.currentTarget && $event.target === $event.currentTarget && (isTimelineModalOpen = false)"
+      style="z-index: 2300;"
+    >
+      <div class="modal-content" @click.stop style="max-width: 960px; width: 95%; max-height: 86vh; overflow-y: auto;">
+        <div class="modal-header-with-close" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h2 style="margin: 0; font-size: 17px; font-weight: 800; color: var(--text-main);">📈 K 进度时间轴（{{ formattedMonthLabel }}）</h2>
+          <button class="modal-close-icon-btn" @click="isTimelineModalOpen = false" title="关闭弹窗" style="background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 18px; height: 18px;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <KrTimelineChart :month="selectedMonth" :items="timelineItems" />
       </div>
     </div>
 
@@ -851,6 +885,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useTodoStore } from '@/stores/todo'
 import type { PerformanceKR, PerformanceCategory } from '@/stores/todo'
 import request from '@/api/request'
+import KrTimelineChart from '@/components/KrTimelineChart.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -1660,8 +1695,7 @@ const getDerivedStats = (kr: PerformanceKR) => {
 }
 
 // Map categories to "K Objectives" and KRs to "R Key Results"
-const objectivesList = computed(() => {
-  return performanceCategories.value.map((cat, idx) => {
+const objectivesList = computed(() => {  return performanceCategories.value.map((cat, idx) => {
     const items = performanceKRs.value.filter(kr => kr.categoryId === cat.id)
     const totalCount = items.filter(kr => kr.status !== 'cancelled').length
     const completedCount = items.filter(kr => kr.status === 'done').length
@@ -1698,6 +1732,23 @@ const objectivesList = computed(() => {
 const totalKRsCount = computed(() => performanceKRs.value.length)
 const cancelledKRsCount = computed(() => performanceKRs.value.filter(kr => kr.status === 'cancelled').length)
 const totalObjectivesCount = computed(() => performanceCategories.value.length)
+
+// K 进度时间轴数据（排除已取消）
+const isTimelineModalOpen = ref(false)
+const timelineItems = computed(() =>
+  performanceCategories.value.flatMap(cat =>
+    performanceKRs.value
+      .filter(kr => kr.categoryId === cat.id && kr.status !== 'cancelled')
+      .map(kr => ({
+        key: kr.id,
+        name: kr.title,
+        objectiveName: cat.name,
+        status: kr.status,
+        planCompleteDate: kr.planCompleteDate || null,
+        doneDate: kr.doneAt ? kr.doneAt.substring(0, 10) : null
+      }))
+  )
+)
 
 // Action triggers
 const openCatModal = (cat: any | null) => {
@@ -2703,5 +2754,28 @@ textarea.form-control {
   padding: 10px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-light);
+}
+
+/* K 时间轴预览按钮 */
+.timeline-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #2563eb;
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  cursor: pointer;
+  margin-left: 14px;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+.timeline-preview-btn:hover {
+  background-color: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
 }
 </style>
